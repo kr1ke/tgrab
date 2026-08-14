@@ -1,0 +1,27 @@
+'use strict';
+
+const { contextBridge, ipcRenderer } = require('electron');
+
+// contextIsolation is on and nodeIntegration off: the renderer gets this narrow,
+// explicit surface and nothing else.
+contextBridge.exposeInMainWorld('tgrab', {
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
+
+  status: () => ipcRenderer.invoke('app:status'),
+  installTdl: () => ipcRenderer.invoke('tdl:install'),
+  onInstallProgress: (cb) => ipcRenderer.on('tdl:install-progress', (_e, s) => cb(s)),
+
+  start: (payload) => ipcRenderer.invoke('download:start', payload),
+  cancel: (id) => ipcRenderer.invoke('download:cancel', id),
+  list: () => ipcRenderer.invoke('download:list'),
+  clear: () => ipcRenderer.invoke('download:clear'),
+  onUpdate: (cb) => ipcRenderer.on('download:update', (_e, rec) => cb(rec)),
+
+  pickDir: () => ipcRenderer.invoke('dialog:pickDir'),
+  reveal: (p) => ipcRenderer.invoke('shell:reveal', p),
+  openExternal: (u) => ipcRenderer.invoke('shell:open', u),
+
+  loginCommand: () => ipcRenderer.invoke('login:command'),
+  cleanSession: () => ipcRenderer.invoke('session:clean'),
+});

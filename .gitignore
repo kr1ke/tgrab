@@ -1,5 +1,5 @@
-# Downloaded media never belongs in the repo — these are hundreds of MB each,
-# they blow past GitHub's 100 MB file limit, and they are someone else's content.
+# Downloaded media never belongs in the repo — hundreds of MB each, past GitHub's
+# 100 MB file limit, and it is someone else's content.
 *.mp4
 *.mkv
 *.mov
@@ -8,17 +8,21 @@
 *.mp3
 *.m4a
 *.wav
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.webp
+
+# Build output and dependencies
+node_modules/
+dist/
+out/
 
 # tdl artefacts
 *.log
 tdl-export.json
 tdl-users.json
 *.backup.tdl
+.tgrab-export.json
 
 # macOS
 .DS_Store
+
+# Screenshots are committed deliberately — keep them
+!docs/screenshots/*.png

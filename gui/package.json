@@ -1,0 +1,38 @@
+{
+  "name": "tgrab-gui",
+  "productName": "tgrab",
+  "version": "0.1.0",
+  "description": "Telegram media downloader that leaves you an actual archive",
+  "main": "main.js",
+  "author": "kr1ke",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "me.kr1ke.tgrab",
+    "productName": "tgrab",
+    "directories": { "output": "../dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "renderer/**/*", "!**/*.map"],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }, { "target": "zip", "arch": ["arm64", "x64"] }]
+    },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }, { "target": "portable", "arch": ["x64"] }]
+    },
+    "linux": {
+      "category": "Utility",
+      "target": [{ "target": "AppImage", "arch": ["x64"] }, { "target": "deb", "arch": ["x64"] }]
+    }
+  }
+}

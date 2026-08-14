@@ -1,0 +1,382 @@
+#!/usr/bin/env bash
+# tgrab — Telegram media downloader that leaves you an actual archive.
+# https://github.com/kr1ke/tgrab
+#
+# Single-file CLI, no build step. Bash 3.2 compatible (macOS ships 3.2).
+
+set -uo pipefail
+
+TGRAB_VERSION="0.1.0"
+TDL_MIN="0.20.3"
+
+TGRAB_HOME="${TGRAB_HOME:-$HOME/.local/share/tgrab}"
+TGRAB_CONFIG="${TGRAB_CONFIG:-$HOME/.config/tgrab/config}"
+TGRAB_LOG="${TGRAB_LOG:-/tmp/tgrab-dl.log}"
+VENDORED_TDL="$TGRAB_HOME/bin/tdl"
+
+JSON=0
+QUIET=0
+LANG_CODE=""
+DEST=""
+
+# ─────────────────────────────── i18n ────────────────────────────────
+# Bash 3.2 has no associative arrays, so messages are plain case blocks.
+
+msg_en() {
+  case "$1" in
+    need_login)    echo "Not logged in. Run: tgrab login" ;;
+    login_close)   echo "Close Telegram Desktop first — tdl reads its tdata directory." ;;
+    login_pick)    echo "Pick your account with the arrow keys, then press Enter." ;;
+    login_pass)    echo "If Telegram Desktop has a local passcode, add: --passcode <code>" ;;
+    login_ok)      echo "Logged in. The auth key is stored in ~/.tdl — run 'tgrab clean' when done." ;;
+    login_noniact) echo "Login is interactive and needs a real terminal. Run 'tgrab login' yourself." ;;
+    installing)    echo "Installing tdl (one time)…" ;;
+    install_ok)    echo "tdl installed at" ;;
+    install_fail)  echo "Could not install tdl automatically. See https://github.com/iyear/tdl/releases" ;;
+    checksum_bad)  echo "Checksum mismatch — refusing to install. This should never happen; report it." ;;
+    started)       echo "Download started in the background. Watch it with: tgrab progress" ;;
+    no_download)   echo "No download in progress." ;;
+    cleaned)       echo "Deleted ~/.tdl. The Telegram auth key is gone; log in again when needed." ;;
+    already_clean) echo "Nothing to clean — ~/.tdl does not exist." ;;
+    key_warning)   echo "Note: the Telegram auth key sits in ~/.tdl in plain text. 2FA does not protect it." ;;
+    bad_url)       echo "That does not look like a Telegram message link." ;;
+    lang_prompt)   echo "Choose language / Выберите язык:" ;;
+    lang_saved)    echo "Saved. Change it any time with --lang or by editing" ;;
+    unknown_cmd)   echo "Unknown command:" ;;
+    need_arg)      echo "Missing required argument:" ;;
+    no_tdl)        echo "tdl is not available and could not be installed." ;;
+    *)             echo "$1" ;;
+  esac
+}
+
+msg_ru() {
+  case "$1" in
+    need_login)    echo "Нет авторизации. Выполните: tgrab login" ;;
+    login_close)   echo "Сначала закройте Telegram Desktop — tdl читает его папку tdata." ;;
+    login_pick)    echo "Выберите аккаунт стрелками и нажмите Enter." ;;
+    login_pass)    echo "Если стоит локальный код-пароль, добавьте: --passcode <код>" ;;
+    login_ok)      echo "Авторизация выполнена. Ключ лежит в ~/.tdl — после работы вызовите 'tgrab clean'." ;;
+    login_noniact) echo "Логин интерактивный и требует настоящего терминала. Запустите 'tgrab login' сами." ;;
+    installing)    echo "Устанавливаю tdl (один раз)…" ;;
+    install_ok)    echo "tdl установлен в" ;;
+    install_fail)  echo "Не удалось установить tdl автоматически. См. https://github.com/iyear/tdl/releases" ;;
+    checksum_bad)  echo "Контрольная сумма не совпала — установка отменена. Так быть не должно, сообщите об этом." ;;
+    started)       echo "Загрузка запущена в фоне. Следить: tgrab progress" ;;
+    no_download)   echo "Активных загрузок нет." ;;
+    cleaned)       echo "Папка ~/.tdl удалена. Ключ Telegram стёрт, при необходимости авторизуйтесь снова." ;;
+    already_clean) echo "Чистить нечего — папки ~/.tdl нет." ;;
+    key_warning)   echo "Важно: ключ Telegram лежит в ~/.tdl открытым текстом. 2FA от его утечки не спасает." ;;
+    bad_url)       echo "Это не похоже на ссылку на сообщение Telegram." ;;
+    lang_prompt)   echo "Choose language / Выберите язык:" ;;
+    lang_saved)    echo "Сохранено. Изменить в любой момент через --lang или правкой" ;;
+    unknown_cmd)   echo "Неизвестная команда:" ;;
+    need_arg)      echo "Не хватает обязательного аргумента:" ;;
+    no_tdl)        echo "tdl недоступен и не может быть установлен." ;;
+    *)             echo "$1" ;;
+  esac
+}
+
+msg() { if [ "$LANG_CODE" = "ru" ]; then msg_ru "$1"; else msg_en "$1"; fi; }
+
+say()  { [ "$JSON" -eq 1 ] || [ "$QUIET" -eq 1 ] || printf '%s\n' "$*"; }
+warn() { [ "$JSON" -eq 1 ] || printf '%s\n' "$*" >&2; }
+die()  {
+  local code="${2:-1}"
+  if [ "$JSON" -eq 1 ]; then printf '{"ok":false,"error":%s}\n' "$(json_str "$1")"
+  else printf '%s\n' "$1" >&2; fi
+  exit "$code"
+}
+
+json_str() { printf '%s' "$1" | perl -e 'local $/; my $s=<>; $s =~ s/(["\\])/\\$1/g; $s =~ s/\n/\\n/g; $s =~ s/\t/\\t/g; print "\"$s\""'; }
+
+# ───────────────────────── language resolution ───────────────────────
+# Priority: --lang flag > $TGRAB_LANG > saved config > $LANG > first-run prompt > en
+
+resolve_lang() {
+  [ -n "$LANG_CODE" ] && return 0
+  if [ -n "${TGRAB_LANG:-}" ]; then LANG_CODE="$TGRAB_LANG"; return 0; fi
+  if [ -f "$TGRAB_CONFIG" ]; then
+    LANG_CODE="$(sed -n 's/^lang=//p' "$TGRAB_CONFIG" 2>/dev/null | head -1)"
+    [ -n "$LANG_CODE" ] && return 0
+  fi
+  case "${LANG:-}" in ru_*|ru) LANG_CODE="ru"; return 0 ;; esac
+  # Interactive first run: ask. Agents pass --lang or --json and never reach this.
+  if [ "$JSON" -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
+    prompt_lang && return 0
+  fi
+  LANG_CODE="en"
+}
+
+prompt_lang() {
+  printf '%s\n' "Choose language / Выберите язык:"
+  printf '  1) English\n  2) Русский\n'
+  printf '> '
+  local a; read -r a || { LANG_CODE="en"; return 0; }
+  case "$a" in 2|ru|RU|р|Р) LANG_CODE="ru" ;; *) LANG_CODE="en" ;; esac
+  save_lang "$LANG_CODE"
+  printf '%s %s\n' "$(msg lang_saved)" "$TGRAB_CONFIG"
+}
+
+save_lang() {
+  mkdir -p "$(dirname "$TGRAB_CONFIG")" 2>/dev/null || return 0
+  if [ -f "$TGRAB_CONFIG" ]; then
+    grep -v '^lang=' "$TGRAB_CONFIG" > "$TGRAB_CONFIG.tmp" 2>/dev/null || true
+    mv "$TGRAB_CONFIG.tmp" "$TGRAB_CONFIG"
+  fi
+  printf 'lang=%s\n' "$1" >> "$TGRAB_CONFIG"
+}
+
+# ──────────────────────────── tdl bootstrap ──────────────────────────
+# tdl is fetched at first use, not vendored into the repo: that keeps it a
+# separate program (mere aggregation) so tgrab's own licence stays unconstrained
+# by tdl's AGPL-3.0, and avoids shipping a 47 MB per-platform binary in git.
+
+find_tdl() {
+  if [ -n "${TDL:-}" ] && [ -x "${TDL:-}" ]; then printf '%s' "$TDL"; return 0; fi
+  if [ -x "$VENDORED_TDL" ]; then printf '%s' "$VENDORED_TDL"; return 0; fi
+  local p; p="$(command -v tdl 2>/dev/null)"
+  if [ -n "$p" ]; then printf '%s' "$p"; return 0; fi
+  return 1
+}
+
+tdl_asset() {
+  local os arch; os="$(uname -s)"; arch="$(uname -m)"
+  case "$os:$arch" in
+    Darwin:arm64)         echo "tdl_MacOS_arm64.tar.gz" ;;
+    Darwin:x86_64)        echo "tdl_MacOS_64bit.tar.gz" ;;
+    Linux:x86_64)         echo "tdl_Linux_64bit.tar.gz" ;;
+    Linux:aarch64|Linux:arm64) echo "tdl_Linux_arm64.tar.gz" ;;
+    *) return 1 ;;
+  esac
+}
+
+install_tdl() {
+  local asset tmp ver
+  asset="$(tdl_asset)" || { warn "$(msg install_fail)"; return 1; }
+  say "$(msg installing)"
+  ver="$(curl -sSL https://api.github.com/repos/iyear/tdl/releases/latest \
+        | sed -n 's/.*"tag_name": *"\(.*\)".*/\1/p' | head -1)"
+  [ -n "$ver" ] || ver="v$TDL_MIN"
+  tmp="$(mktemp -d)" || return 1
+  (
+    cd "$tmp" || exit 1
+    curl -sSLO "https://github.com/iyear/tdl/releases/download/$ver/$asset" || exit 1
+    curl -sSLO "https://github.com/iyear/tdl/releases/download/$ver/tdl_checksums.txt" || exit 1
+    # Never install an unverified binary, even though the checksum only proves
+    # transit integrity — it does not vouch for the publisher.
+    shasum -a 256 -c tdl_checksums.txt --ignore-missing >/dev/null 2>&1 || exit 3
+    tar xzf "$asset" || exit 1
+  )
+  local rc=$?
+  if [ $rc -eq 3 ]; then rm -rf "$tmp"; warn "$(msg checksum_bad)"; return 1; fi
+  [ $rc -eq 0 ] || { rm -rf "$tmp"; warn "$(msg install_fail)"; return 1; }
+
+  mkdir -p "$TGRAB_HOME/bin"
+  cp "$tmp/tdl" "$VENDORED_TDL" && chmod +x "$VENDORED_TDL"
+  xattr -d com.apple.quarantine "$VENDORED_TDL" 2>/dev/null
+  rm -rf "$tmp"
+  say "$(msg install_ok) $VENDORED_TDL"
+  printf '%s' "$VENDORED_TDL"
+}
+
+ensure_tdl() {
+  local t; t="$(find_tdl)" && { printf '%s' "$t"; return 0; }
+  install_tdl >/dev/null || return 1
+  [ -x "$VENDORED_TDL" ] || return 1
+  printf '%s' "$VENDORED_TDL"
+}
+
+logged_in() { [ -s "$HOME/.tdl/data/default" ] && [ "$(stat -f %z "$HOME/.tdl/data/default" 2>/dev/null || stat -c %s "$HOME/.tdl/data/default" 2>/dev/null || echo 0)" -gt 140000 ]; }
+
+# ──────────────────────────── commands ───────────────────────────────
+
+NAME_TEMPLATE='{{ formatDate .MessageDate "2006-01-02_15-04" }}_{{ if .FileCaption }}{{ filenamify .FileCaption 60 }}_{{ end }}{{ .MessageID }}'
+
+cmd_login() {
+  local passcode="" tdl
+  while [ $# -gt 0 ]; do
+    case "$1" in --passcode) passcode="${2:-}"; shift 2 ;; *) shift ;; esac
+  done
+  tdl="$(ensure_tdl)" || die "$(msg no_tdl)" 4
+  if [ ! -t 0 ]; then die "$(msg login_noniact)" 5; fi
+  say "$(msg login_close)"
+  say "$(msg login_pick)"
+  [ -n "$passcode" ] || say "$(msg login_pass)"
+  if [ -n "$passcode" ]; then "$tdl" login -T desktop -p "$passcode"; else "$tdl" login -T desktop; fi
+  local rc=$?
+  [ $rc -eq 0 ] && { say "$(msg login_ok)"; warn "$(msg key_warning)"; }
+  return $rc
+}
+
+cmd_get() {
+  local url="${1:-}"; shift 2>/dev/null
+  [ -n "$url" ] || die "$(msg need_arg) <url>" 2
+  case "$url" in https://t.me/*|http://t.me/*|t.me/*) : ;; *) die "$(msg bad_url)" 2 ;; esac
+  local dir="${DEST:-${1:-$PWD}}"
+  local tdl; tdl="$(ensure_tdl)" || die "$(msg no_tdl)" 4
+  logged_in || die "$(msg need_login)" 5
+  mkdir -p "$dir" || die "cannot write to $dir" 1
+
+  : >"$TGRAB_LOG"
+  echo "START url=$url dest=$dir" >>"$TGRAB_LOG"
+  nohup "$tdl" dl -u "$url" -d "$dir" --template "$NAME_TEMPLATE" >>"$TGRAB_LOG" 2>&1 &
+  local pid=$!
+  ( wait $pid; echo "EXIT=$?" >>"$TGRAB_LOG" ) >/dev/null 2>&1 &
+
+  if [ "$JSON" -eq 1 ]; then
+    printf '{"ok":true,"status":"started","pid":%s,"log":%s,"dest":%s}\n' \
+      "$pid" "$(json_str "$TGRAB_LOG")" "$(json_str "$dir")"
+  else
+    say "$(msg started)"
+  fi
+}
+
+cmd_archive() {
+  local chat="${1:-}"; shift 2>/dev/null
+  [ -n "$chat" ] || die "$(msg need_arg) <chat>" 2
+  local last=50
+  while [ $# -gt 0 ]; do
+    case "$1" in --last) last="${2:-50}"; shift 2 ;; *) shift ;; esac
+  done
+  local dir="${DEST:-$PWD}"
+  local tdl; tdl="$(ensure_tdl)" || die "$(msg no_tdl)" 4
+  logged_in || die "$(msg need_login)" 5
+  mkdir -p "$dir" || die "cannot write to $dir" 1
+
+  local exp="$dir/.tgrab-export.json"
+  "$tdl" chat export -c "$chat" -T last -i "$last" -o "$exp" >/dev/null 2>&1 \
+    || die "export failed for chat: $chat" 6
+
+  : >"$TGRAB_LOG"
+  echo "START chat=$chat dest=$dir" >>"$TGRAB_LOG"
+  nohup "$tdl" dl -f "$exp" -d "$dir" --template "$NAME_TEMPLATE" >>"$TGRAB_LOG" 2>&1 &
+  local pid=$!
+  ( wait $pid; echo "EXIT=$?" >>"$TGRAB_LOG" ) >/dev/null 2>&1 &
+
+  if [ "$JSON" -eq 1 ]; then
+    printf '{"ok":true,"status":"started","pid":%s,"log":%s,"dest":%s,"count":%s}\n' \
+      "$pid" "$(json_str "$TGRAB_LOG")" "$(json_str "$dir")" "$last"
+  else
+    say "$(msg started)"
+  fi
+}
+
+cmd_progress() {
+  local here; here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  if [ "$JSON" -eq 1 ]; then
+    "$here/progress.sh" "$TGRAB_LOG" --json 2>/dev/null || {
+      printf '{"ok":true,"status":"idle"}\n'; return 0; }
+    return $?
+  fi
+  "$here/progress.sh" "$TGRAB_LOG"
+}
+
+cmd_chats() {
+  local tdl; tdl="$(ensure_tdl)" || die "$(msg no_tdl)" 4
+  logged_in || die "$(msg need_login)" 5
+  if [ "$JSON" -eq 1 ]; then "$tdl" chat ls -o json; else "$tdl" chat ls -o table; fi
+}
+
+cmd_clean() {
+  if [ -e "$HOME/.tdl" ]; then
+    rm -rf "$HOME/.tdl"
+    if [ "$JSON" -eq 1 ]; then printf '{"ok":true,"status":"cleaned"}\n'; else say "$(msg cleaned)"; fi
+  else
+    if [ "$JSON" -eq 1 ]; then printf '{"ok":true,"status":"already_clean"}\n'; else say "$(msg already_clean)"; fi
+  fi
+}
+
+cmd_doctor() {
+  local tdl_path tdl_ver ff logged
+  tdl_path="$(find_tdl 2>/dev/null)" || tdl_path=""
+  [ -n "$tdl_path" ] && tdl_ver="$("$tdl_path" version 2>/dev/null | sed -n 's/^Version: *//p' | head -1)"
+  ff="$(command -v ffprobe 2>/dev/null)"
+  logged_in && logged=true || logged=false
+
+  if [ "$JSON" -eq 1 ]; then
+    printf '{"ok":true,"tgrab":%s,"tdl":%s,"tdl_version":%s,"ffprobe":%s,"logged_in":%s,"lang":%s}\n' \
+      "$(json_str "$TGRAB_VERSION")" "$(json_str "${tdl_path:-}")" "$(json_str "${tdl_ver:-}")" \
+      "$(json_str "${ff:-}")" "$logged" "$(json_str "$LANG_CODE")"
+  else
+    printf 'tgrab      %s\n' "$TGRAB_VERSION"
+    printf 'tdl        %s\n' "${tdl_path:-— (will be installed on first use)}"
+    [ -n "${tdl_ver:-}" ] && printf 'tdl ver    %s\n' "$tdl_ver"
+    printf 'ffprobe    %s\n' "${ff:-— (optional, used to verify downloads)}"
+    printf 'logged in  %s\n' "$logged"
+    printf 'language   %s\n' "$LANG_CODE"
+    printf 'config     %s\n' "$TGRAB_CONFIG"
+  fi
+}
+
+usage() {
+  cat <<EOF
+tgrab $TGRAB_VERSION — Telegram media downloader that leaves you an actual archive.
+
+USAGE
+  tgrab <command> [options]
+
+COMMANDS
+  login [--passcode <code>]   Import the Telegram Desktop session (interactive)
+  get <url> [dir]             Download media from a t.me message link
+  archive <chat> [--last N]   Bulk-download recent media from a chat (default 50)
+  progress                    Print the current download status line
+  chats                       List your chats
+  doctor                      Report dependency and login status
+  clean                       Delete the stored Telegram auth key (~/.tdl)
+
+OPTIONS
+  --lang <en|ru>   Interface language. Also \$TGRAB_LANG, or saved in the config file.
+  --dir <path>     Destination directory (default: current directory)
+  --json           Machine-readable output. Implies non-interactive; never prompts.
+  --quiet          Suppress informational output
+  -h, --help       This help
+  -v, --version    Version
+
+EXIT CODES
+  0 success · 2 bad arguments · 4 tdl unavailable · 5 not logged in
+  6 export failed · 3 (from progress) download finished · 4 (from progress) failed
+
+AGENTS
+  Use --json --lang en for deterministic, parseable output. \`tgrab get\` returns
+  immediately; poll \`tgrab progress --json\` until status is "done" or "failed".
+  See AGENTS.md in the repository.
+EOF
+}
+
+# ────────────────────────────── main ─────────────────────────────────
+
+CMD=""
+ARGS=""
+set -- "$@"
+PARSED=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --lang)    LANG_CODE="${2:-en}"; shift 2 ;;
+    --lang=*)  LANG_CODE="${1#*=}"; shift ;;
+    --dir)     DEST="${2:-}"; shift 2 ;;
+    --dir=*)   DEST="${1#*=}"; shift ;;
+    --json)    JSON=1; shift ;;
+    --quiet|-q) QUIET=1; shift ;;
+    -h|--help) LANG_CODE="${LANG_CODE:-en}"; usage; exit 0 ;;
+    -v|--version) printf 'tgrab %s\n' "$TGRAB_VERSION"; exit 0 ;;
+    *)         PARSED+=("$1"); shift ;;
+  esac
+done
+
+case "${LANG_CODE:-}" in en|ru|"") : ;; *) LANG_CODE="en" ;; esac
+resolve_lang
+
+set -- ${PARSED+"${PARSED[@]}"}
+CMD="${1:-}"; shift 2>/dev/null
+
+case "$CMD" in
+  login)    cmd_login "$@" ;;
+  get|dl|download) cmd_get "$@" ;;
+  archive)  cmd_archive "$@" ;;
+  progress|status) cmd_progress "$@" ;;
+  chats)    cmd_chats "$@" ;;
+  clean|logout) cmd_clean "$@" ;;
+  doctor)   cmd_doctor "$@" ;;
+  ""|help)  usage ;;
+  *)        die "$(msg unknown_cmd) $CMD" 2 ;;
+esac

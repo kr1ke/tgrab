@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;" />
+  <title>tgrab</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="drag-strip"></div>
+
+  <!-- ── first run: language ─────────────────────────────────────── -->
+  <div id="lang-gate" class="gate hidden">
+    <div class="gate-card">
+      <div class="logo-mark">↓</div>
+      <h1>tgrab</h1>
+      <p class="gate-sub">Choose language · Выберите язык</p>
+      <div class="lang-grid">
+        <button class="lang-btn" data-lang="en"><span class="lang-name">English</span></button>
+        <button class="lang-btn" data-lang="ru"><span class="lang-name">Русский</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── main ────────────────────────────────────────────────────── -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo-mark sm">↓</span>
+        <span class="brand-name">tgrab</span>
+      </div>
+      <div class="topbar-actions">
+        <button id="lang-toggle" class="ghost-btn" title="Language"><span id="lang-label">EN</span></button>
+        <button id="open-settings" class="ghost-btn" data-i18n-title="settings">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="banner" class="banner hidden">
+      <div class="banner-body">
+        <strong id="banner-title"></strong>
+        <span id="banner-text"></span>
+        <code id="banner-code" class="hidden"></code>
+      </div>
+      <button id="banner-copy" class="mini-btn hidden" data-i18n="copy">Copy</button>
+      <button id="banner-dismiss" class="mini-btn ghost">✕</button>
+    </div>
+
+    <main class="content">
+      <section class="hero">
+        <label class="field-label" data-i18n="linkLabel">Telegram message link</label>
+        <div class="input-row">
+          <input id="url" type="text" spellcheck="false"
+                 placeholder="https://t.me/c/1234567890/42" />
+          <button id="go" class="primary-btn">
+            <span data-i18n="download">Download</span>
+          </button>
+        </div>
+        <div class="hint-row">
+          <span class="hint" data-i18n="linkHint">Private, protected, public, groups, Saved Messages — all work.</span>
+          <button id="toggle-adv" class="link-btn" data-i18n="options">Options</button>
+        </div>
+
+        <div id="advanced" class="advanced hidden">
+          <div class="adv-grid">
+            <div class="adv-field">
+              <label data-i18n="customName">Custom file name</label>
+              <input id="custom-name" type="text" spellcheck="false" data-i18n-ph="autoName" />
+            </div>
+            <div class="adv-field">
+              <label data-i18n="saveTo">Save to</label>
+              <div class="path-row">
+                <input id="dest" type="text" spellcheck="false" readonly />
+                <button id="pick-dir" class="mini-btn" data-i18n="browse">Browse</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="list-section">
+        <div class="list-head">
+          <h2 data-i18n="downloads">Downloads</h2>
+          <button id="clear-done" class="link-btn" data-i18n="clearDone">Clear finished</button>
+        </div>
+        <div id="list" class="list"></div>
+        <div id="empty" class="empty">
+          <div class="empty-mark">↓</div>
+          <p data-i18n="emptyTitle">Nothing downloaded yet</p>
+          <span data-i18n="emptyHint">Paste a Telegram message link above to start.</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ── settings ────────────────────────────────────────────────── -->
+  <div id="settings-overlay" class="overlay hidden">
+    <aside class="panel">
+      <div class="panel-head">
+        <h2 data-i18n="settings">Settings</h2>
+        <button id="close-settings" class="ghost-btn">✕</button>
+      </div>
+      <div class="panel-body">
+
+        <div class="group">
+          <h3 data-i18n="grpFiles">Files</h3>
+          <div class="row">
+            <label data-i18n="saveTo">Save to</label>
+            <div class="path-row">
+              <input id="s-dest" type="text" readonly />
+              <button id="s-pick" class="mini-btn" data-i18n="browse">Browse</button>
+            </div>
+          </div>
+          <div class="row">
+            <label data-i18n="template">File name template</label>
+            <input id="s-template" type="text" spellcheck="false" />
+            <p class="row-hint" data-i18n="templateHint">
+              Go template. Date is the original post time, not the download time.
+            </p>
+            <div class="preset-row">
+              <button class="chip" data-preset="default" data-i18n="presetDefault">Date + caption</button>
+              <button class="chip" data-preset="dateid" data-i18n="presetDateId">Date + id</button>
+              <button class="chip" data-preset="caption" data-i18n="presetCaption">Caption only</button>
+              <button class="chip" data-preset="raw" data-i18n="presetRaw">Original</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3 data-i18n="grpTransfer">Transfer</h3>
+          <div class="row">
+            <label>
+              <span data-i18n="threads">Threads per file</span>
+              <span class="val" id="v-threads">4</span>
+            </label>
+            <input id="s-threads" type="range" min="1" max="16" step="1" />
+          </div>
+          <div class="row">
+            <label>
+              <span data-i18n="concurrent">Concurrent downloads</span>
+              <span class="val" id="v-conc">2</span>
+            </label>
+            <input id="s-conc" type="range" min="1" max="8" step="1" />
+          </div>
+          <div class="row">
+            <label data-i18n="proxy">Proxy</label>
+            <input id="s-proxy" type="text" spellcheck="false" placeholder="socks5://127.0.0.1:1080" />
+          </div>
+        </div>
+
+        <div class="group">
+          <h3 data-i18n="grpApp">Application</h3>
+          <div class="row">
+            <label data-i18n="theme">Theme</label>
+            <div class="seg" id="s-theme">
+              <button data-theme="system" data-i18n="themeSystem">System</button>
+              <button data-theme="dark" data-i18n="themeDark">Dark</button>
+              <button data-theme="light" data-i18n="themeLight">Light</button>
+            </div>
+          </div>
+          <div class="row">
+            <label data-i18n="language">Language</label>
+            <div class="seg" id="s-lang">
+              <button data-lang="en">English</button>
+              <button data-lang="ru">Русский</button>
+            </div>
+          </div>
+          <div class="row">
+            <label data-i18n="tdlPath">tdl binary path</label>
+            <input id="s-tdl" type="text" spellcheck="false" data-i18n-ph="tdlAuto" />
+          </div>
+        </div>
+
+        <div class="group danger-group">
+          <h3 data-i18n="grpSecurity">Security</h3>
+          <p class="row-hint" data-i18n="keyWarning">
+            The Telegram auth key is stored in ~/.tdl in plain text. Anything that can read your
+            home directory gets full account access — 2FA does not protect against it.
+          </p>
+          <label class="check">
+            <input id="s-clean" type="checkbox" />
+            <span data-i18n="cleanOnQuit">Delete the auth key when the app quits</span>
+          </label>
+          <button id="clean-now" class="danger-btn" data-i18n="cleanNow">Delete auth key now</button>
+        </div>
+
+      </div>
+    </aside>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
