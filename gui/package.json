@@ -7,6 +7,10 @@
   "author": "kr1ke",
   "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kr1ke/tgrab.git"
+  },
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder",
@@ -21,6 +25,7 @@
   "build": {
     "appId": "me.kr1ke.tgrab",
     "productName": "tgrab",
+    "publish": null,
     "directories": { "output": "../dist", "buildResources": "build" },
     "files": ["main.js", "preload.js", "renderer/**/*", "!**/*.map"],
     "mac": {
