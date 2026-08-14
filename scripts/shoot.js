@@ -38,6 +38,12 @@ const SHOTS = {
   '05-login': { state: { lang: 'en', records: [], loggedIn: false }, prep: null },
   '06-light': { state: { lang: 'en', records: RECORDS }, prep: null, theme: 'light' },
   '07-signin': { state: { lang: 'en', records: [], loggedIn: false, automated: true }, prep: null },
+  '08-channel': { state: { lang: 'en', records: RECORDS },
+    prep: "document.querySelector('[data-mode=channel]').click()" },
+  '09-tools': { state: { lang: 'en', records: RECORDS },
+    prep: "document.querySelectorAll('.tool-btn')[1].click()" },
+  '10-nodesktop': { state: { lang: 'en', records: [], loggedIn: false, automated: true, hasDesktop: false },
+    prep: null },
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

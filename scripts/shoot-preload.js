@@ -41,4 +41,7 @@ contextBridge.exposeInMainWorld('tgrab', {
   onLoginEvent: () => {},
   process: async () => ({}),
   mediaAvailable: async () => true,
+  duration: async () => 3254,
+  startChannel: async () => records[0] || {},
+  hasDesktop: async () => STATE.hasDesktop !== false,
 });

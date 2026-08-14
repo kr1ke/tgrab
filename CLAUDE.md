@@ -21,7 +21,13 @@ vendored**. See [Licensing](#licensing-this-is-load-bearing).
 ## Hard rules
 
 - **Never automate `tdl login` without a PTY.** It is a TUI: a plain pipe gets `Error: EOF`.
-  The GUI drives it through `node-pty`; the CLI hands the command to the user.
+  The GUI gets a terminal from `node-pty` when it built, else the system `script` (macOS and
+  Linux only). `node-pty` is an **optional** dependency on purpose — if a CI runner cannot
+  compile it the build still ships and that platform falls back to opening a terminal.
+- **No Telegram Desktop means no session to import.** Check `login:hasDesktop` first and offer
+  QR sign-in (`tdl login -T qr`) instead of starting an import that cannot work.
+- **Trimming must re-encode.** `-c copy` only cuts on keyframes: a 2s→5s trim of a
+  sparsely-keyframed file came back as 0s→5s. Seek with `-ss` before `-i`, then re-encode.
 - **`tdl login` asks two questions.** The second is *"Do you want to logout existing desktop
   session? (y/N)"* — answering `y` **signs the user out of Telegram Desktop**. Any automation
   must answer `n` explicitly, never by letting a default fall through.
@@ -43,7 +49,7 @@ that no longer exists.
 
 ```bash
 cd gui
-for s in 01-language 02-downloads 03-settings 04-russian 06-light 07-signin; do
+for s in 01-language 02-downloads 03-settings 04-russian 06-light 07-signin 08-channel 09-tools 10-nodesktop; do
   SHOT=$s npx electron ../scripts/shoot.js
 done
 ```
@@ -105,6 +111,8 @@ artefact that can be checked locally.
 | `Please specify author 'email'` | `build.linux.maintainer` |
 | `default Electron icon is used` | `gui/build/icon.png` must exist |
 | Native module fails at `require()` | the `electron-builder install-app-deps` step must run after `npm ci` |
+| `No module named 'distutils'` | node-gyp on Python 3.12+; the workflow pins `setup-python` to 3.11 |
+| `Could not find any Visual Studio installation` | Windows node-gyp; `GYP_MSVS_VERSION: 2022` and the step is `continue-on-error` |
 
 Builds are **unsigned** — macOS Gatekeeper and Windows SmartScreen will warn. Signing needs paid
 certificates; say so rather than implying the warning is a bug.

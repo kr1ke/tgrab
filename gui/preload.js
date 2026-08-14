@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('tgrab', {
   checkLogin: () => ipcRenderer.invoke('login:check'),
 
   loginAutomated: () => ipcRenderer.invoke('login:automated'),
+  hasDesktop: () => ipcRenderer.invoke('login:hasDesktop'),
   loginStart: (opts) => ipcRenderer.invoke('login:start', opts),
   loginChoose: (i) => ipcRenderer.invoke('login:choose', i),
   loginCancel: () => ipcRenderer.invoke('login:cancel'),
@@ -35,4 +36,6 @@ contextBridge.exposeInMainWorld('tgrab', {
 
   process: (payload) => ipcRenderer.invoke('media:process', payload),
   mediaAvailable: () => ipcRenderer.invoke('media:available'),
+  duration: (file) => ipcRenderer.invoke('media:duration', file),
+  startChannel: (opts) => ipcRenderer.invoke('channel:start', opts),
 });

@@ -65,6 +65,66 @@
 
     <main class="content">
       <section class="hero">
+        <div class="mode-tabs" id="mode-tabs">
+          <button class="mode-tab on" data-mode="single" data-i18n="modeSingle">One message</button>
+          <button class="mode-tab" data-mode="channel" data-i18n="modeChannel">Whole channel</button>
+        </div>
+
+        <div id="pane-channel" class="hidden">
+          <label class="field-label" data-i18n="channelLabel">Channel or chat</label>
+          <div class="input-row">
+            <input id="chat" type="text" spellcheck="false" placeholder="@channel" />
+            <button id="go-channel" class="primary-btn"><span data-i18n="download">Download</span></button>
+          </div>
+
+          <div class="ch-grid">
+            <div class="ch-field">
+              <label data-i18n="howMuch">How much</label>
+              <div class="seg" id="ch-mode">
+                <button data-cmode="last" class="on" data-i18n="cmLast">Latest</button>
+                <button data-cmode="time" data-i18n="cmDates">Dates</button>
+                <button data-cmode="id" data-i18n="cmRange">Message range</button>
+              </div>
+            </div>
+
+            <div class="ch-field" id="ch-last">
+              <label>
+                <span data-i18n="postsCount">Number of posts</span>
+                <span class="val" id="v-count">50</span>
+              </label>
+              <input id="ch-count" type="range" min="10" max="1000" step="10" value="50" />
+            </div>
+
+            <div class="ch-field hidden" id="ch-time">
+              <label data-i18n="dateRange">Date range</label>
+              <div class="path-row">
+                <input id="ch-from" type="date" />
+                <input id="ch-to" type="date" />
+              </div>
+            </div>
+
+            <div class="ch-field hidden" id="ch-id">
+              <label data-i18n="msgRange">Message ids</label>
+              <div class="path-row">
+                <input id="ch-min" type="text" placeholder="1" spellcheck="false" />
+                <input id="ch-max" type="text" placeholder="500" spellcheck="false" />
+              </div>
+            </div>
+
+            <div class="ch-field wide">
+              <label data-i18n="whatToTake">What to take</label>
+              <div class="preset-row" id="ch-types">
+                <button class="chip on" data-ext="mp4,mkv,mov,webm" data-i18n="tVideo">Video</button>
+                <button class="chip" data-ext="mp3,m4a,ogg,wav" data-i18n="tAudio">Audio</button>
+                <button class="chip" data-ext="jpg,jpeg,png,webp" data-i18n="tPhoto">Photos</button>
+                <button class="chip" data-ext="pdf,zip,doc,docx" data-i18n="tDocs">Documents</button>
+                <button class="chip" data-ext="" data-i18n="tAll">Everything</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="pane-single">
         <label class="field-label" data-i18n="linkLabel">Telegram message link</label>
         <div class="input-row">
           <input id="url" type="text" spellcheck="false"
@@ -95,6 +155,7 @@
               </div>
             </div>
           </div>
+        </div>
         </div>
       </section>
 
@@ -136,6 +197,17 @@
       <div id="login-step-pick" class="modal-step hidden">
         <p class="step-note" data-i18n="pickAccount">Choose an account</p>
         <div id="login-accounts" class="account-list"></div>
+      </div>
+
+      <div id="login-step-qr" class="modal-step hidden">
+        <p class="step-note" data-i18n="qrHint">Telegram → Settings → Devices → Link Desktop Device, then scan this.</p>
+        <pre id="login-qr" class="qr"></pre>
+      </div>
+
+      <div id="login-step-nodesktop" class="modal-step hidden">
+        <p class="step-note" data-i18n="noDesktop">Telegram Desktop was not found on this computer. You can sign in by scanning a QR code with the Telegram app on your phone instead.</p>
+        <button id="login-qr-go" class="primary-btn wide" data-i18n="useQr">Sign in with a QR code</button>
+        <button id="login-get-desktop" class="link-btn" data-i18n="getDesktop">Get Telegram Desktop</button>
       </div>
 
       <div id="login-step-fail" class="modal-step hidden">
@@ -243,7 +315,7 @@
           <h3 data-i18n="grpAbout">About</h3>
           <div class="about-row">
             <span class="about-k">tgrab</span>
-            <span class="about-v" id="about-version">0.3.0</span>
+            <span class="about-v" id="about-version">0.4.0</span>
           </div>
           <div class="about-row">
             <span class="about-k" data-i18n="author">Author</span>

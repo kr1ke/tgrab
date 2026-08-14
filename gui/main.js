@@ -297,14 +297,37 @@ function suffixed(file, suffix, ext) {
   return path.join(dir, `${base}_${suffix}${ext || path.extname(file)}`);
 }
 
+// Quality presets, named by the thing users actually pick: a resolution.
+const QUALITY = {
+  1080: { h: 1080, crf: '26', ab: '160k' },
+  720: { h: 720, crf: '28', ab: '128k' },
+  480: { h: 480, crf: '30', ab: '96k' },
+  360: { h: 360, crf: '32', ab: '80k' },
+};
+
+const CONTAINERS = {
+  // Copy the streams where the container accepts them — instant, no quality loss.
+  mp4: ['-c', 'copy', '-movflags', '+faststart'],
+  mkv: ['-c', 'copy'],
+  // WebM has no h264/aac, so this one genuinely re-encodes and is slow.
+  webm: ['-c:v', 'libvpx-vp9', '-crf', '34', '-b:v', '0', '-c:a', 'libopus'],
+  mp3: ['-vn', '-c:a', 'libmp3lame', '-b:a', '192k'],
+  m4a: ['-vn', '-c:a', 'aac', '-b:a', '192k'],
+};
+
 function opArgs(op, params, input, output) {
   switch (op) {
     case 'audio':
       return ['-i', input, '-vn', '-c:a', 'aac', '-b:a', '192k', '-y', output];
-    case 'compress':
-      // 720p / CRF 28 is the "obviously smaller, still fine" point for talk-style video.
-      return ['-i', input, '-vf', 'scale=-2:min(720\\,ih)', '-c:v', 'libx264',
-        '-crf', '28', '-preset', 'veryfast', '-c:a', 'aac', '-b:a', '128k', '-y', output];
+    case 'compress': {
+      const q = QUALITY[params.quality] || QUALITY[720];
+      return ['-i', input, '-vf', `scale=-2:min(${q.h}\\,ih)`, '-c:v', 'libx264',
+        '-crf', q.crf, '-preset', 'veryfast', '-c:a', 'aac', '-b:a', q.ab, '-y', output];
+    }
+    case 'format': {
+      const c = CONTAINERS[params.container] || CONTAINERS.mp4;
+      return ['-i', input, ...c, '-y', output];
+    }
     case 'speed': {
       const n = Math.min(2, Math.max(1.05, parseFloat(params.factor) || 1.5));
       // atempo is only valid across 0.5–2.0, which the clamp above already guarantees.
@@ -314,11 +337,16 @@ function opArgs(op, params, input, output) {
         '-preset', 'veryfast', '-c:a', 'aac', '-y', output];
     }
     case 'trim': {
-      // Stream copy keeps this instant even on a 250 MB file; cuts land on the nearest
-      // keyframe, which is what every simple trimmer does and what users expect here.
-      const a = ['-ss', String(params.start || '0')];
-      if (params.end) a.push('-to', String(params.end));
-      return [...a, '-i', input, '-c', 'copy', '-avoid_negative_ts', 'make_zero', '-y', output];
+      // Seek before -i so the decoder skips ahead cheaply, then re-encode the selection.
+      // Stream copy would be instant but can only cut on keyframes: a 2s→5s trim of a
+      // sparsely-keyframed file came back as 0s→5s in testing. Cutting where the user
+      // actually asked is worth the encode.
+      const s = Math.max(0, parseFloat(params.start) || 0);
+      const e = params.end === '' || params.end == null ? null : parseFloat(params.end);
+      const a = ['-ss', String(s), '-i', input];
+      if (e !== null && !isNaN(e) && e > s) a.push('-t', String(e - s));
+      return [...a, '-c:v', 'libx264', '-crf', '20', '-preset', 'veryfast',
+        '-c:a', 'aac', '-b:a', '160k', '-y', output];
     }
     default:
       return null;
@@ -328,8 +356,16 @@ function opArgs(op, params, input, output) {
 async function startProcess({ file, op, params }) {
   const id = nextId++;
   const bin = ffmpegBin();
-  const labels = { audio: 'audio', compress: 'small', speed: `${params.factor || 1.5}x`, trim: 'trim' };
-  const ext = op === 'audio' ? '.m4a' : null;
+  const labels = {
+    audio: 'audio',
+    compress: `${(params && params.quality) || 720}p`,
+    speed: `${(params && params.factor) || 1.5}x`,
+    trim: 'trim',
+    format: (params && params.container) || 'mp4',
+  };
+  const ext = op === 'audio' ? '.m4a'
+    : op === 'format' ? `.${(params && params.container) || 'mp4'}`
+    : null;
   const output = suffixed(file, labels[op] || op, ext);
 
   const rec = {
@@ -444,6 +480,85 @@ ipcMain.handle('media:process', async (_e, payload) => {
 });
 
 ipcMain.handle('media:available', () => !!ffmpegBin());
+ipcMain.handle('media:duration', (_e, file) => probeDuration(file));
+
+// Bulk: export a message list, then hand it to the downloader. This is the whole reason
+// tdl beats saving by hand, so it gets a first-class place in the UI rather than a flag.
+ipcMain.handle('channel:start', async (_e, opts) => {
+  const { chat, mode, count, fromDate, toDate, minId, maxId, types } = opts;
+  const dest = opts.dest || settings.dest;
+  const id = nextId++;
+  const rec = {
+    id, kind: 'channel', url: chat, name: chat, dest,
+    status: 'preparing', percent: 0, transferred: null, speed: null, eta: null, error: null,
+  };
+  downloads.set(id, rec);
+  push(rec);
+
+  let tdl = findTdl();
+  if (!tdl) {
+    try { rec.status = 'installing'; push(rec); tdl = await installTdl(); }
+    catch (e) { rec.status = 'failed'; rec.error = `tdl unavailable: ${e.message}`; push(rec); return strip(rec); }
+  }
+  if (!isLoggedIn()) { rec.status = 'failed'; rec.error = 'not_logged_in'; push(rec); return strip(rec); }
+  try { fs.mkdirSync(dest, { recursive: true }); }
+  catch (e) { rec.status = 'failed'; rec.error = e.message; push(rec); return strip(rec); }
+
+  const exportFile = path.join(app.getPath('temp'), `tgrab-export-${id}.json`);
+  const exp = ['chat', 'export', '-c', chat, '-o', exportFile];
+  if (mode === 'last') exp.push('-T', 'last', '-i', String(count || 50));
+  else if (mode === 'time') exp.push('-T', 'time', '-i', `${fromDate},${toDate}`);
+  else if (mode === 'id') exp.push('-T', 'id', '-i', `${minId},${maxId}`);
+  else exp.push('-T', 'last', '-i', String(count || 50));
+
+  rec.status = 'listing';
+  push(rec);
+
+  const okExport = await new Promise((resolve) => {
+    execFile(tdl, exp, { maxBuffer: 1 << 24 }, (err) => resolve(!err));
+  });
+  if (!okExport) { rec.status = 'failed'; rec.error = 'export failed — check the chat name'; push(rec); return strip(rec); }
+
+  const args = ['dl', '-f', exportFile, '-d', dest, '--template', settings.template || DEFAULT_TEMPLATE,
+    '-t', String(settings.threads || 4), '-l', String(settings.concurrent || 2)];
+  if (types && types.length) args.push('-i', types.join(','));
+  if (settings.proxy) args.push('--proxy', settings.proxy);
+
+  const child = spawn(tdl, args, { windowsHide: true });
+  rec._child = child;
+  rec.status = 'running';
+  push(rec);
+
+  let buf = '';
+  const onData = (d) => {
+    buf += d.toString();
+    if (buf.length > 65536) buf = buf.slice(-32768);
+    const p = parseProgress(buf);
+    if (p.percent !== null) rec.percent = p.percent;
+    if (p.transferred) rec.transferred = p.transferred;
+    if (p.speed) rec.speed = p.speed;
+    const el = toSeconds(p.elapsed);
+    rec.eta = (rec.percent > 1 && el > 0) ? Math.round(el * (100 - rec.percent) / rec.percent) : null;
+    push(rec);
+  };
+  child.stdout.on('data', onData);
+  child.stderr.on('data', onData);
+  child.on('close', (code) => {
+    const clean = stripAnsi(buf);
+    if (code === 0 || /done!/.test(clean)) { rec.status = 'done'; rec.percent = 100; }
+    else {
+      rec.status = 'failed';
+      const m = clean.match(/(?:Error|error):\s*(.+)/);
+      rec.error = m ? m[1].trim() : `exited with code ${code}`;
+    }
+    try { fs.unlinkSync(exportFile); } catch { /* best effort */ }
+    push(rec);
+  });
+
+  return strip(rec);
+});
+
+const strip = (r) => { const { _child, ...safe } = r; return safe; };
 
 ipcMain.handle('download:list', () => {
   return [...downloads.values()].map(({ _child, ...r }) => r);
@@ -477,8 +592,49 @@ ipcMain.handle('session:clean', () => {
 // Answering (2) with "y" SIGNS THE USER OUT OF TELEGRAM DESKTOP. It is always answered
 // "n" here, explicitly, never by letting a stray keystroke fall through to the default.
 
-let pty = null;
-try { pty = require('node-pty'); } catch { pty = null; }
+// Two ways to get a terminal, preferred in order:
+//   1. node-pty — works everywhere including Windows, but it is a native module and CI
+//      has to compile it. It is an OPTIONAL dependency: if a runner cannot build it the
+//      app still ships, and that platform quietly uses the next option.
+//   2. the system `script` utility — no build step, but macOS/Linux only.
+// Windows with no node-pty has neither, and falls back to opening a real terminal.
+let nodePty = null;
+try { nodePty = require('node-pty'); } catch { nodePty = null; }
+
+const PTY_OK = !!nodePty || !IS_WIN;
+
+function spawnViaPty(bin, args) {
+  if (nodePty) {
+    const term = nodePty.spawn(bin, args, {
+      name: 'xterm-color', cols: 100, rows: 34, cwd: os.homedir(), env: process.env,
+    });
+    // Adapt node-pty's shape to the child_process one used below.
+    return {
+      stdin: { write: (s) => term.write(s) },
+      stdout: { on: (ev, cb) => ev === 'data' && term.onData(cb) },
+      stderr: { on: () => {} },
+      on: (ev, cb) => { if (ev === 'close') term.onExit(({ exitCode }) => cb(exitCode)); },
+      kill: () => term.kill(),
+    };
+  }
+  if (IS_MAC) return spawn('script', ['-q', '/dev/null', bin, ...args], { stdio: 'pipe' });
+  const cmd = [bin, ...args].map((a) => `'${String(a).replace(/'/g, `'\\''`)}'`).join(' ');
+  return spawn('script', ['-qec', cmd, '/dev/null'], { stdio: 'pipe' });
+}
+
+// Where Telegram Desktop keeps its session, per platform. Without this directory there is
+// nothing to import, and the app must offer QR sign-in instead of pretending otherwise.
+function tdataPath() {
+  if (IS_MAC) return path.join(os.homedir(), 'Library', 'Application Support', 'Telegram Desktop', 'tdata');
+  if (IS_WIN) return path.join(process.env.APPDATA || '', 'Telegram Desktop', 'tdata');
+  return path.join(os.homedir(), '.local', 'share', 'TelegramDesktop', 'tdata');
+}
+
+function hasDesktopSession() {
+  try { return fs.readdirSync(tdataPath()).length > 0; } catch { return false; }
+}
+
+ipcMain.handle('login:hasDesktop', () => hasDesktopSession());
 
 let loginSession = null;
 
@@ -488,24 +644,30 @@ function emitLogin(payload) {
   if (win && !win.isDestroyed()) win.webContents.send('login:event', payload);
 }
 
-ipcMain.handle('login:automated', () => !!pty);
+ipcMain.handle('login:automated', () => PTY_OK);
 
 ipcMain.handle('login:start', async (_e, opts = {}) => {
-  if (!pty) return { ok: false, error: 'pty_unavailable' };
+  if (!PTY_OK) return { ok: false, error: 'pty_unavailable' };
   if (loginSession) return { ok: false, error: 'already_running' };
 
   const tdl = findTdl() || (await installTdl().catch(() => null));
   if (!tdl) return { ok: false, error: 'tdl_unavailable' };
 
-  const args = ['login', '-T', 'desktop'];
-  if (opts.passcode) args.push('-p', opts.passcode);
+  // QR sign-in is the fallback when Telegram Desktop is not installed: tdl prints a QR
+  // block to the terminal, the user scans it in the phone app. No code, no password —
+  // the app never handles a credential either way.
+  const qr = opts.mode === 'qr' || !hasDesktopSession();
+  const args = qr ? ['login', '-T', 'qr'] : ['login', '-T', 'desktop'];
+  if (!qr && opts.passcode) args.push('-p', opts.passcode);
 
-  const term = pty.spawn(tdl, args, {
-    name: 'xterm-color', cols: 100, rows: 30,
-    cwd: os.homedir(), env: process.env,
-  });
+  const child = spawnViaPty(tdl, args);
+  const term = {
+    write: (s) => { try { child.stdin.write(s); } catch { /* exited */ } },
+    kill: () => { try { child.kill('SIGTERM'); } catch { /* already gone */ } },
+  };
 
-  const state = { term, buf: '', phase: 'starting', accounts: [], picked: false, logoutAnswered: false };
+  const state = { term, child, buf: '', phase: 'starting', accounts: [], picked: false,
+    logoutAnswered: false, qr, qrSent: false };
   loginSession = state;
 
   const settle = () => {
@@ -529,11 +691,22 @@ ipcMain.handle('login:start', async (_e, opts = {}) => {
     }
   };
 
-  term.onData((d) => {
-    state.buf = (state.buf + d).slice(-16000);
+  const onChunk = (d) => {
+    state.buf = (state.buf + d.toString()).slice(-16000);
     const clean = stripCtl(state.buf);
 
-    if (state.phase === 'starting' && /Choose a user id/i.test(clean)) {
+    // The QR is drawn with block characters; forward the block itself to the renderer,
+    // which shows it monospace so a phone camera can read it.
+    if (state.qr) {
+      const block = clean.split('\n').filter((l) => /[█▀▄ ]{8,}/.test(l));
+      if (block.length >= 8) {
+        state.qrSent = true;
+        emitLogin({ phase: 'qr', qr: block.join('\n') });
+      }
+      if (/successfully|Welcome/i.test(clean)) emitLogin({ phase: 'importing' });
+    }
+
+    if (!state.qr && state.phase === 'starting' && /Choose a user id/i.test(clean)) {
       state.phase = 'listing';
       setTimeout(settle, 700);
       return;
@@ -553,9 +726,12 @@ ipcMain.handle('login:start', async (_e, opts = {}) => {
       state.phase = 'needs2fa';
       emitLogin({ phase: 'needs2fa' });
     }
-  });
+  };
 
-  term.onExit(({ exitCode }) => {
+  child.stdout.on('data', onChunk);
+  child.stderr.on('data', onChunk);
+
+  child.on('close', (exitCode) => {
     const clean = stripCtl(state.buf);
     const ok = exitCode === 0 || /successfully/i.test(clean);
     loginSession = null;
@@ -633,9 +809,12 @@ function applyTheme() {
   nativeTheme.themeSource = settings.theme === 'system' ? 'system' : settings.theme;
 }
 
+const ICON = path.join(__dirname, 'build', 'icon.png');
+
 function createWindow() {
   win = new BrowserWindow({
     width: 940, height: 720, minWidth: 720, minHeight: 560,
+    icon: fs.existsSync(ICON) ? ICON : undefined,
     titleBarStyle: IS_MAC ? 'hiddenInset' : 'default',
     backgroundColor: '#0e1117',
     show: false,
@@ -654,6 +833,8 @@ function createWindow() {
 app.whenReady().then(() => {
   settings = loadSettings();
   applyTheme();
+  // Without this the dock/taskbar shows Electron's own icon in development.
+  if (IS_MAC && app.dock && fs.existsSync(ICON)) { try { app.dock.setIcon(ICON); } catch { /* not fatal */ } }
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });

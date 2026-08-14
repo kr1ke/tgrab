@@ -56,6 +56,17 @@ const I18N = {
     lgDone: 'Connected.',
     lg2fa: 'This account asks for its cloud password. tgrab will not collect it — finish in a terminal.',
     connectBtn: 'Connect Telegram',
+    modeSingle: 'One message', modeChannel: 'Whole channel',
+    channelLabel: 'Channel or chat', howMuch: 'How much',
+    cmLast: 'Latest', cmDates: 'Dates', cmRange: 'Message range',
+    postsCount: 'Number of posts', dateRange: 'Date range', msgRange: 'Message ids',
+    whatToTake: 'What to take',
+    tVideo: 'Video', tAudio: 'Audio', tPhoto: 'Photos', tDocs: 'Documents', tAll: 'Everything',
+    needChat: 'Enter a channel name, like @durov.',
+    format: 'Format', quality: 'Quality', stListing: 'listing posts',
+    qrHint: 'Telegram → Settings → Devices → Link Desktop Device, then scan this.',
+    noDesktop: 'Telegram Desktop was not found on this computer. You can sign in by scanning a QR code with the Telegram app on your phone instead.',
+    useQr: 'Sign in with a QR code', getDesktop: 'Get Telegram Desktop',
   },
   ru: {
     settings: 'Настройки', download: 'Скачать', options: 'Параметры', copy: 'Копировать',
@@ -102,6 +113,17 @@ const I18N = {
     lgDone: 'Подключено.',
     lg2fa: 'Этот аккаунт запрашивает облачный пароль. tgrab его не собирает — завершите вход в терминале.',
     connectBtn: 'Подключить Telegram',
+    modeSingle: 'Одно сообщение', modeChannel: 'Канал целиком',
+    channelLabel: 'Канал или чат', howMuch: 'Сколько брать',
+    cmLast: 'Последние', cmDates: 'По датам', cmRange: 'Диапазон сообщений',
+    postsCount: 'Количество постов', dateRange: 'Диапазон дат', msgRange: 'Номера сообщений',
+    whatToTake: 'Что забирать',
+    tVideo: 'Видео', tAudio: 'Аудио', tPhoto: 'Фото', tDocs: 'Документы', tAll: 'Всё',
+    needChat: 'Укажите канал, например @durov.',
+    format: 'Формат', quality: 'Качество', stListing: 'собираю список',
+    qrHint: 'Telegram → Настройки → Устройства → Подключить устройство, затем наведите камеру.',
+    noDesktop: 'Telegram Desktop на этом компьютере не найден. Можно войти, отсканировав QR-код приложением Telegram на телефоне.',
+    useQr: 'Войти по QR-коду', getDesktop: 'Скачать Telegram Desktop',
   },
 };
 
@@ -135,7 +157,8 @@ function fmtEta(sec) {
 function statusLabel(s, rec) {
   if (s === 'running' && rec && rec.kind === 'convert') return t('stConverting');
   return { running: t('stRunning'), done: t('stDone'), failed: t('stFailed'),
-    preparing: t('stPreparing'), installing: t('stInstalling'), cancelled: t('stCancelled') }[s] || s;
+    preparing: t('stPreparing'), installing: t('stInstalling'),
+    listing: t('stListing'), cancelled: t('stCancelled') }[s] || s;
 }
 
 function shortName(rec) {
@@ -146,53 +169,131 @@ function shortName(rec) {
 
 const isVideo = (p) => /\.(mp4|mkv|mov|webm|m4v|avi)$/i.test(p || '');
 
-// One click for the two that need no input; a single control for the two that do.
-// Every result is written to a new file — the download itself is never touched.
+// A row of verbs; picking one reveals only that verb's options. Nothing is configured
+// until it is asked for, and every result is written to a new file.
 function tools(rec) {
   const wrap = document.createElement('div');
-  wrap.className = 'tools';
+  wrap.className = 'tools-wrap';
+
+  const row = document.createElement('div');
+  row.className = 'tools';
+  const panel = document.createElement('div');
+  panel.className = 'tool-panel hidden';
 
   const run = (op, params) => window.tgrab.process({ file: rec.file.path, op, params })
     .then((r) => { items.set(r.id, r); render(); });
 
-  const btn = (label, onClick) => {
+  const btn = (label, onClick, cls) => {
     const b = document.createElement('button');
-    b.className = 'tool-btn';
+    b.className = `tool-btn${cls ? ' ' + cls : ''}`;
     b.textContent = label;
     b.onclick = onClick;
     return b;
   };
 
-  wrap.append(
+  const chips = (opts, onPick) => {
+    const box = document.createElement('div');
+    box.className = 'preset-row';
+    opts.forEach(([label, value]) => {
+      box.appendChild(btn(label, () => onPick(value), 'tool-mini'));
+    });
+    return box;
+  };
+
+  let open = null;
+  const show = (name, build) => {
+    if (open === name) { panel.classList.add('hidden'); open = null; return; }
+    open = name;
+    panel.innerHTML = '';
+    panel.appendChild(build());
+    panel.classList.remove('hidden');
+  };
+
+  row.append(
     btn(t('audioOnly'), () => run('audio', {})),
-    btn(t('compress'), () => run('compress', {})),
+    btn(t('compress'), () => show('q', () =>
+      chips([['1080p', 1080], ['720p', 720], ['480p', 480], ['360p', 360]],
+        (q) => run('compress', { quality: q })))),
+    btn(t('format'), () => show('f', () =>
+      chips([['MP4', 'mp4'], ['MKV', 'mkv'], ['WebM', 'webm'], ['MP3', 'mp3'], ['M4A', 'm4a']],
+        (c) => run('format', { container: c })))),
+    btn(t('speedUp'), () => show('s', () =>
+      chips([['1.25×', 1.25], ['1.5×', 1.5], ['2×', 2]],
+        (f) => run('speed', { factor: f })))),
+    btn(t('trim'), () => show('t', () => trimPanel(rec, run))),
   );
 
-  const speedWrap = document.createElement('div');
-  speedWrap.className = 'tool-group';
-  speedWrap.appendChild(Object.assign(document.createElement('span'),
-    { className: 'tool-label', textContent: t('speedUp') }));
-  [1.25, 1.5, 2].forEach((f) => {
-    const b = btn(`${f}×`, () => run('speed', { factor: f }));
-    b.classList.add('tool-mini');
-    speedWrap.appendChild(b);
-  });
-  wrap.appendChild(speedWrap);
-
-  const trimWrap = document.createElement('div');
-  trimWrap.className = 'tool-group';
-  trimWrap.appendChild(Object.assign(document.createElement('span'),
-    { className: 'tool-label', textContent: t('trim') }));
-  const from = Object.assign(document.createElement('input'),
-    { type: 'text', className: 'tool-time', placeholder: '0:00' });
-  const to = Object.assign(document.createElement('input'),
-    { type: 'text', className: 'tool-time', placeholder: t('to') });
-  const go = btn(t('apply'), () => run('trim', { start: norm(from.value), end: norm(to.value) }));
-  go.classList.add('tool-mini');
-  trimWrap.append(from, to, go);
-  wrap.appendChild(trimWrap);
-
+  wrap.append(row, panel);
   return wrap;
+}
+
+// Trim works two ways at once: drag the bar, or type the times. Each edits the same
+// values, so whichever the user reaches for, the other stays in sync.
+function trimPanel(rec, run) {
+  const box = document.createElement('div');
+  box.className = 'trim-full';
+
+  const scrub = document.createElement('div');
+  scrub.className = 'scrub';
+  const sel = document.createElement('div');
+  sel.className = 'scrub-sel';
+  const ticks = document.createElement('div');
+  ticks.className = 'scrub-ticks';
+  scrub.append(sel, ticks);
+
+  const rowEl = document.createElement('div');
+  rowEl.className = 'trim-row';
+  const from = Object.assign(document.createElement('input'),
+    { type: 'text', className: 'tool-time', value: '0:00' });
+  const to = Object.assign(document.createElement('input'),
+    { type: 'text', className: 'tool-time', value: '' });
+  const go = document.createElement('button');
+  go.className = 'tool-btn tool-mini';
+  go.textContent = t('apply');
+  rowEl.append(from, to, go);
+
+  let dur = 0, a = 0, b = 0;
+
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+  const paint = () => {
+    if (!dur) return;
+    sel.style.left = `${(a / dur) * 100}%`;
+    sel.style.width = `${((b - a) / dur) * 100}%`;
+    ticks.innerHTML = `<span>${fmt(a)}</span><span>${fmt(b)}</span>`;
+  };
+
+  window.tgrab.duration(rec.file.path).then((d) => {
+    dur = d || 0;
+    if (!dur) { scrub.style.display = 'none'; return; }
+    a = 0; b = dur;
+    from.value = fmt(a); to.value = fmt(b);
+    paint();
+  });
+
+  // Click sets the near edge — simpler than drag handles and hard to get wrong.
+  scrub.onclick = (e) => {
+    if (!dur) return;
+    const r = scrub.getBoundingClientRect();
+    const at = Math.max(0, Math.min(dur, ((e.clientX - r.left) / r.width) * dur));
+    if (Math.abs(at - a) <= Math.abs(at - b)) { a = Math.min(at, b - 1); from.value = fmt(a); }
+    else { b = Math.max(at, a + 1); to.value = fmt(b); }
+    paint();
+  };
+
+  const sync = () => {
+    const na = parseInt(norm(from.value), 10);
+    const nb = parseInt(norm(to.value), 10);
+    if (!isNaN(na)) a = Math.max(0, dur ? Math.min(na, dur) : na);
+    if (!isNaN(nb)) b = dur ? Math.min(nb, dur) : nb;
+    paint();
+  };
+  from.onchange = sync;
+  to.onchange = sync;
+
+  go.onclick = () => run('trim', { start: norm(from.value), end: norm(to.value) });
+
+  box.append(scrub, rowEl);
+  return box;
 }
 
 // Accepts 90, 1:30 or 00:01:30 and hands ffmpeg something it always understands.
@@ -390,11 +491,16 @@ async function afterReady() {
 }
 
 // ── sign in ────────────────────────────────────────────────────────
-const loginSteps = ['close', 'busy', 'pick', 'fail'];
+const loginSteps = ['close', 'busy', 'pick', 'fail', 'qr', 'nodesktop'];
 function loginStep(name) {
   loginSteps.forEach((s) => $(`#login-step-${s}`).classList.toggle('hidden', s !== name));
 }
-function openLogin() { loginStep('close'); $('#login-overlay').classList.remove('hidden'); }
+async function openLogin() {
+  // No Telegram Desktop means there is no session to import — say so and offer QR
+  // rather than starting something that cannot work.
+  loginStep(await window.tgrab.hasDesktop() ? 'close' : 'nodesktop');
+  $('#login-overlay').classList.remove('hidden');
+}
 function closeLogin() { $('#login-overlay').classList.add('hidden'); }
 
 $('#login-go').onclick = async () => {
@@ -406,6 +512,14 @@ $('#login-go').onclick = async () => {
     $('#login-error').textContent = r.error;
   }
 };
+
+$('#login-qr-go').onclick = async () => {
+  loginStep('busy');
+  $('#login-status').textContent = t('lgStarting');
+  const r = await window.tgrab.loginStart({ mode: 'qr' });
+  if (!r.ok) { loginStep('fail'); $('#login-error').textContent = r.error; }
+};
+$('#login-get-desktop').onclick = () => window.tgrab.openExternal('https://desktop.telegram.org/');
 
 $('#login-close').onclick = () => { window.tgrab.loginCancel(); closeLogin(); };
 $('#login-retry').onclick = () => loginStep('close');
@@ -425,6 +539,7 @@ window.tgrab.onLoginEvent((p) => {
     });
     return;
   }
+  if (p.phase === 'qr') { loginStep('qr'); $('#login-qr').textContent = p.qr; return; }
   if (p.phase === 'importing') { loginStep('busy'); $('#login-status').textContent = t('lgImporting'); return; }
   if (p.phase === 'finishing') { loginStep('busy'); $('#login-status').textContent = t('lgFinishing'); return; }
   if (p.phase === 'needs2fa') { loginStep('fail'); $('#login-error').textContent = t('lg2fa'); return; }
@@ -455,6 +570,65 @@ $('#go').onclick = async () => {
 };
 
 $('#url').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#go').click(); });
+
+// Single-message download stays the default and the headline capability; whole-channel
+// is the second tab, not the first.
+$$('#mode-tabs .mode-tab').forEach((tab) => {
+  tab.onclick = () => {
+    $$('#mode-tabs .mode-tab').forEach((x) => x.classList.toggle('on', x === tab));
+    const channel = tab.dataset.mode === 'channel';
+    $('#pane-channel').classList.toggle('hidden', !channel);
+    $('#pane-single').classList.toggle('hidden', channel);
+  };
+});
+
+$$('#ch-mode button').forEach((b) => {
+  b.onclick = () => {
+    $$('#ch-mode button').forEach((x) => x.classList.toggle('on', x === b));
+    const m = b.dataset.cmode;
+    $('#ch-last').classList.toggle('hidden', m !== 'last');
+    $('#ch-time').classList.toggle('hidden', m !== 'time');
+    $('#ch-id').classList.toggle('hidden', m !== 'id');
+  };
+});
+
+$$('#ch-types .chip').forEach((c) => {
+  c.onclick = () => {
+    // "Everything" is exclusive; the rest are a multi-select.
+    if (c.dataset.ext === '') $$('#ch-types .chip').forEach((x) => x.classList.toggle('on', x === c));
+    else {
+      $$('#ch-types .chip').forEach((x) => { if (x.dataset.ext === '') x.classList.remove('on'); });
+      c.classList.toggle('on');
+      if (!$$('#ch-types .chip.on').length) c.classList.add('on');
+    }
+  };
+});
+
+$('#ch-count').oninput = (e) => { $('#v-count').textContent = e.target.value; };
+
+$('#go-channel').onclick = async () => {
+  const chat = $('#chat').value.trim();
+  if (!chat) { showInfoBanner(t('needChat')); return; }
+  $('#banner').classList.add('hidden');
+
+  const mode = $('#ch-mode button.on').dataset.cmode;
+  const types = $$('#ch-types .chip.on').map((c) => c.dataset.ext).filter(Boolean).join(',');
+  const toUnix = (v) => (v ? Math.floor(new Date(v).getTime() / 1000) : 0);
+
+  const rec = await window.tgrab.startChannel({
+    chat, mode,
+    count: +$('#ch-count').value,
+    fromDate: toUnix($('#ch-from').value),
+    toDate: toUnix($('#ch-to').value) || Math.floor(Date.now() / 1000),
+    minId: $('#ch-min').value.trim() || '1',
+    maxId: $('#ch-max').value.trim() || '999999',
+    types: types ? types.split(',') : [],
+    dest: settings.dest,
+  });
+  items.set(rec.id, rec);
+  if (rec.error === 'not_logged_in') openLogin();
+  render();
+};
 
 $('#toggle-adv').onclick = () => $('#advanced').classList.toggle('hidden');
 $('#pick-dir').onclick = async () => { const d = await window.tgrab.pickDir(); if (d) await patch({ dest: d }); };

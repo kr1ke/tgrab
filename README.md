@@ -28,8 +28,10 @@ watch.
 **Sources** — private channels · protected channels with content-saving off · public channels ·
 groups and supergroups · forum topics · direct chats · Saved Messages
 
-**Downloading**
-- Single message by link, or a whole channel in one command
+**One message, or a whole channel**
+- A link grabs that post — the headline case, and what the app opens on
+- A channel grabs **the latest N posts, a date range, or a message-id range**
+- Filter by kind: video · audio · photos · documents · everything
 - Custom name per download, or a template for everything
 - Resume interrupted transfers, skip files already on disk
 - Multi-threaded, with concurrency and proxy you control
@@ -38,11 +40,12 @@ groups and supergroups · forum topics · direct chats · Saved Messages
 **Naming** — files land as `date_time_caption_id`, from the original post, so an archive sorts
 by content and a re-download never duplicates.
 
-**After the download** — one click each, always to a new file, never overwriting the original:
+**After the download** — always to a new file, never overwriting the original:
 - **Audio only** — strip the video, keep an `.m4a`
-- **Compress** — 720p, much smaller, still watchable
+- **Compress** — pick 1080p · 720p · 480p · 360p
+- **Format** — MP4 · MKV · WebM · MP3 · M4A, stream-copied where the container allows
 - **Speed up** — 1.25× · 1.5× · 2×, audio pitch-corrected
-- **Trim** — from/to in `mm:ss`, instant
+- **Trim** — drag the bar or type the times, both stay in sync; cuts land exactly where you asked
 
 **Interface** — English and Russian, light and dark, live progress with speed and ETA,
 `--json` on every CLI command for agents.
@@ -52,9 +55,15 @@ by content and a re-download never duplicates.
 
 ## Install
 
+> **Desktop only.** tgrab runs on macOS, Windows and Linux. There is no mobile app and there
+> cannot be a like-for-like one: iOS forbids apps from running a subprocess at all, so the `tdl`
+> binary has nothing to execute it, and on both phones there is no Telegram Desktop session to
+> import — which is exactly how tgrab signs in without a code or password.
+
+
 | | For | |
 |---|---|---|
-| **App** | point and click | [Releases](https://github.com/kr1ke/tgrab/releases) — `.dmg` · `.exe` · `.AppImage` · `.deb` |
+| **App** | point and click | [**Download the latest release**](https://github.com/kr1ke/tgrab/releases/latest) — macOS `.dmg` · Windows `.exe` · Linux `.AppImage` / `.deb` |
 | **CLI** | terminal, scripting | `git clone https://github.com/kr1ke/tgrab && cd tgrab && ./bin/tgrab doctor` |
 | **Skill** | Claude Code, agents | `cp -r skill/tgrab ~/.claude/skills/` |
 
@@ -81,25 +90,23 @@ Options: `--lang <en|ru>` `--dir <path>` `--json` `--quiet` `--help`.
 
 <table>
 <tr>
+<td width="50%"><img src="docs/screenshots/07-signin.png" alt="Sign in"></td>
+<td width="50%"><img src="docs/screenshots/08-channel.png" alt="Whole channel"></td>
+</tr>
+<tr>
+<td align="center"><em>Sign-in — no code, no password</em></td>
+<td align="center"><em>Whole channel, by count, dates or id range</em></td>
+</tr>
+<tr>
 <td width="50%"><img src="docs/screenshots/03-settings.png" alt="Settings"></td>
-<td width="50%"><img src="docs/screenshots/06-light.png" alt="Sign in"></td>
+<td width="50%"><img src="docs/screenshots/06-light.png" alt="Light theme"></td>
 </tr>
 <tr>
 <td align="center"><em>Template, threads, proxy, theme</em></td>
-<td align="center"><em>Sign-in — no code, no password</em></td>
+<td align="center"><em>Light theme</em></td>
 </tr>
 </table>
 
-## The one trap
-
-**File timestamps are the original Telegram post date, not the download time.** A file fetched
-seconds ago can carry a months-old mtime, so `find -newermt`, `ls -lat` and "newest file in the
-folder" **will not find it** — and it looks exactly like a failed download. Match the filename
-instead: `<date>_<time>_<caption>_<msg_id>.<ext>`.
-
-```bash
-ls -la ~/Videos/*_<msg_id>.*
-```
 
 ## Security
 

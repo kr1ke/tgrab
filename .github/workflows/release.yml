@@ -42,10 +42,19 @@ jobs:
         working-directory: gui
         run: npm ci
 
-      # node-pty is a native module and must be rebuilt against Electron's ABI on each
-      # runner; npm ci alone links it against system Node and the app fails at require().
-      - name: Rebuild native modules for Electron
+      # node-pty is OPTIONAL: it gives Windows an automated sign-in, but it is the only
+      # thing here that compiles. Python 3.12 removed distutils, which node-gyp still
+      # needs, so pin 3.11. If the rebuild fails anyway the build continues — the app
+      # detects the missing module and falls back to opening a terminal.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Rebuild optional native modules
         working-directory: gui
+        continue-on-error: true
+        env:
+          GYP_MSVS_VERSION: '2022'
         run: npx electron-builder install-app-deps
 
       - name: Build

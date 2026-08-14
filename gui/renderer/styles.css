@@ -1,11 +1,13 @@
-/* tgrab — "transmission ledger".
-   The product's claim is that it leaves you a real archive, so the visual language is
-   record-keeping and instrument readout: hairline-ruled rows, a monospace column for
-   every figure, and an accent taken from the material the subject is made of — copper
-   wire for live transfer, its own verdigris for a finished one.
+/* tgrab — Telegram-family palette on a ledger layout.
+   Colours are Telegram's own (#2AABEE over #229ED9, and Telegram Desktop's dark chat
+   greys) so the app reads as part of that world. The layout stays record-keeping:
+   hairline-ruled rows rather than floating cards, a monospace column for every figure,
+   and a state stripe so status reads without the label.
 
    Light is the base palette; the dark block redefines tokens only. Electron drives
-   prefers-color-scheme through nativeTheme, so no [data-theme] stamps are needed. */
+   prefers-color-scheme through nativeTheme, so no [data-theme] stamps are needed.
+   The --copper/--verdigris token names predate the repalette and now simply mean
+   "accent" and "success". */
 
 :root {
   --paper: #eef3f7;
@@ -309,6 +311,61 @@ input::placeholder { color: var(--faint); }
   font-family: var(--mono);
 }
 
+/* ── mode tabs & channel form ────────────────────────────────────── */
+.mode-tabs {
+  display: flex; gap: 2px; margin-bottom: 16px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.mode-tab {
+  padding: 8px 2px; margin-right: 20px; font-size: 13px; font-weight: 550;
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--faint); cursor: pointer; margin-bottom: -1px;
+  transition: color .15s var(--ease), border-color .15s var(--ease);
+}
+.mode-tab:hover { color: var(--muted); }
+.mode-tab.on { color: var(--copper); border-bottom-color: var(--copper); }
+
+.ch-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+  margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--rule-soft);
+}
+.ch-field { display: flex; flex-direction: column; gap: 7px; }
+.ch-field.wide { grid-column: 1 / -1; }
+.ch-field > label {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .9px;
+  color: var(--faint); font-weight: 600;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.ch-field .val {
+  font-family: var(--mono); color: var(--copper); font-weight: 600;
+  font-variant-numeric: tabular-nums; text-transform: none; letter-spacing: 0;
+}
+input[type="date"] {
+  flex: 1; padding: 8px 10px; font-family: var(--mono); font-size: 12px;
+  background: var(--paper); color: var(--text);
+  border: 1px solid var(--rule); border-radius: var(--r);
+}
+input[type="date"]:focus { outline: none; border-color: var(--copper); }
+
+/* ── trim scrubber ───────────────────────────────────────────────── */
+.scrub {
+  position: relative; height: 30px; width: 100%; margin: 4px 0 2px;
+  background: var(--surface-2); border-radius: var(--r); cursor: pointer;
+  overflow: hidden;
+}
+.scrub-sel {
+  position: absolute; top: 0; bottom: 0;
+  background: var(--copper-wash); border-left: 2px solid var(--copper);
+  border-right: 2px solid var(--copper);
+}
+.scrub-ticks {
+  position: absolute; inset: 0; display: flex; justify-content: space-between;
+  padding: 0 6px; align-items: center; pointer-events: none;
+  font-family: var(--mono); font-size: 9.5px; color: var(--faint);
+}
+.trim-row { display: flex; align-items: center; gap: 6px; width: 100%; }
+.trim-full { width: 100%; display: flex; flex-direction: column; gap: 5px; }
+
 /* Connectivity note — stated plainly, not as an alarm. */
 .notice {
   margin-top: 11px; padding-top: 11px; border-top: 1px dashed var(--rule-soft);
@@ -319,10 +376,12 @@ input::placeholder { color: var(--faint); }
   background: var(--copper); margin-right: 7px; vertical-align: 1.5px;
 }
 
-/* Post-download tools: one click where no input is needed, one control where it is. */
-.tools {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-  margin-top: 12px; padding-top: 11px; border-top: 1px dashed var(--rule-soft);
+/* Post-download tools: a row of verbs, options revealed only for the one picked. */
+.tools-wrap { margin-top: 12px; padding-top: 11px; border-top: 1px dashed var(--rule-soft); }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tool-panel {
+  margin-top: 9px; padding: 10px; border-radius: var(--r);
+  background: var(--surface-2); animation: rise .18s var(--ease);
 }
 .tool-btn {
   padding: 5px 10px; font-size: 11.5px; font-weight: 500;
@@ -481,6 +540,12 @@ input[type="range"]::-webkit-slider-thumb {
   animation: spin .8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.qr {
+  font-family: var(--mono); font-size: 7px; line-height: 7px; letter-spacing: 0;
+  background: #fff; color: #000; padding: 12px; border-radius: var(--r);
+  white-space: pre; overflow: auto; max-width: 100%; user-select: none;
+}
 
 .account-list { display: flex; flex-direction: column; gap: 7px; width: 100%; }
 .account-btn {
