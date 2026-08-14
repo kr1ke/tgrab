@@ -2,8 +2,9 @@
 
 **English** · [Русский](README.ru.md) · [AGENTS.md](AGENTS.md)
 
-Telegram media downloader that leaves you an actual archive. Desktop app, CLI, and an agent
-skill — one engine behind all three.
+Telegram media downloader that leaves you an actual archive. **Downloads from private channels,
+protected channels with saving switched off, groups and direct chats** — anything your own
+account can already see. Desktop app, CLI, and an agent skill, one engine behind all three.
 
 ![tgrab downloading](docs/screenshots/02-downloads.png)
 
