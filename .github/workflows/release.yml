@@ -50,6 +50,12 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Gives node-gyp a chance to locate MSVC on the Windows runner; without it the
+      # bundled finder walks back through VS2015/2013 and gives up.
+      - name: Set up MSBuild (Windows)
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v2
+
       - name: Rebuild optional native modules
         working-directory: gui
         continue-on-error: true

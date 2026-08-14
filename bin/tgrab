@@ -6,7 +6,7 @@
 
 set -uo pipefail
 
-TGRAB_VERSION="0.4.0"
+TGRAB_VERSION="0.4.1"
 TDL_MIN="0.20.3"
 
 TGRAB_HOME="${TGRAB_HOME:-$HOME/.local/share/tgrab}"

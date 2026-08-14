@@ -112,7 +112,7 @@ artefact that can be checked locally.
 | `default Electron icon is used` | `gui/build/icon.png` must exist |
 | Native module fails at `require()` | the `electron-builder install-app-deps` step must run after `npm ci` |
 | `No module named 'distutils'` | node-gyp on Python 3.12+; the workflow pins `setup-python` to 3.11 |
-| `Could not find any Visual Studio installation` | Windows node-gyp; `GYP_MSVS_VERSION: 2022` and the step is `continue-on-error` |
+| `Could not find any Visual Studio installation` | Windows node-gyp. `microsoft/setup-msbuild` helps it look; the rebuild step is `continue-on-error` **and** `build.npmRebuild` is `false`, because electron-builder otherwise repeats the rebuild during packaging and fails there instead |
 
 Builds are **unsigned** — macOS Gatekeeper and Windows SmartScreen will warn. Signing needs paid
 certificates; say so rather than implying the warning is a bug.
