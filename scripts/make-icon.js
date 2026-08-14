@@ -12,19 +12,21 @@ const OUT = path.join(__dirname, '..', 'gui', 'build');
 const S = 1024;
 
 // Padding keeps the mark clear of macOS's own rounding and of Linux launcher crops.
+// Telegram's own blue pair (#2AABEE over #229ED9) with a descending paper plane —
+// same family, deliberately not their circular logo mark.
 const HTML = `<!doctype html><meta charset="utf-8"><style>
   html,body{margin:0;padding:0;width:${S}px;height:${S}px;background:transparent}
   .plate{
-    position:absolute; inset:88px; border-radius:210px;
-    background:linear-gradient(135deg,#4a9eff 0%,#6366f1 55%,#7c3aed 100%);
+    position:absolute; inset:80px; border-radius:220px;
+    background:linear-gradient(180deg,#2aabee 0%,#229ed9 100%);
     display:grid; place-items:center;
   }
-  svg{width:430px;height:430px}
+  svg{width:500px;height:500px;transform:translateX(-10px)}
 </style>
 <div class="plate">
-  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1"
-       stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 3v13"/><path d="M6.5 10.5 12 16l5.5-5.5"/><path d="M4 20h16"/>
+  <svg viewBox="0 0 24 24">
+    <path d="M20.5 4.2 3.6 11.1a.6.6 0 0 0 .04 1.11l4.2 1.42 1.6 4.9a.6.6 0 0 0 1.05.2l2.2-2.66 4.2 3.1a.6.6 0 0 0 .94-.33l3.5-13.9a.6.6 0 0 0-.83-.7Z" fill="#fff"/>
+    <path d="m9.5 13.9 8.4-6.6-6.4 7.7Z" fill="#fff" opacity=".42"/>
   </svg>
 </div>`;
 

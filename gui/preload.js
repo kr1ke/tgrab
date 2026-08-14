@@ -25,6 +25,12 @@ contextBridge.exposeInMainWorld('tgrab', {
   loginCommand: () => ipcRenderer.invoke('login:command'),
   openLoginTerminal: () => ipcRenderer.invoke('login:openTerminal'),
   checkLogin: () => ipcRenderer.invoke('login:check'),
+
+  loginAutomated: () => ipcRenderer.invoke('login:automated'),
+  loginStart: (opts) => ipcRenderer.invoke('login:start', opts),
+  loginChoose: (i) => ipcRenderer.invoke('login:choose', i),
+  loginCancel: () => ipcRenderer.invoke('login:cancel'),
+  onLoginEvent: (cb) => ipcRenderer.on('login:event', (_e, p) => cb(p)),
   cleanSession: () => ipcRenderer.invoke('session:clean'),
 
   process: (payload) => ipcRenderer.invoke('media:process', payload),

@@ -37,6 +37,7 @@ const SHOTS = {
   '04-russian': { state: { lang: 'ru', records: RECORDS }, prep: "document.querySelector('#toggle-adv').click()" },
   '05-login': { state: { lang: 'en', records: [], loggedIn: false }, prep: null },
   '06-light': { state: { lang: 'en', records: RECORDS }, prep: null, theme: 'light' },
+  '07-signin': { state: { lang: 'en', records: [], loggedIn: false, automated: true }, prep: null },
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

@@ -32,4 +32,13 @@ contextBridge.exposeInMainWorld('tgrab', {
   openExternal: () => {},
   loginCommand: async () => '"~/.local/share/tgrab/bin/tdl" login -T desktop',
   cleanSession: async () => true,
+  openLoginTerminal: async () => ({ ok: true }),
+  checkLogin: async () => STATE.loggedIn !== false,
+  loginAutomated: async () => STATE.automated === true,
+  loginStart: async () => ({ ok: true }),
+  loginChoose: async () => true,
+  loginCancel: async () => true,
+  onLoginEvent: () => {},
+  process: async () => ({}),
+  mediaAvailable: async () => true,
 });

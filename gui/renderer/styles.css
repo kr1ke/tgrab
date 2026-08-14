@@ -8,23 +8,24 @@
    prefers-color-scheme through nativeTheme, so no [data-theme] stamps are needed. */
 
 :root {
-  --paper: #f6f5f2;
+  --paper: #eef3f7;
   --surface: #ffffff;
-  --surface-2: #efedea;
-  --rule: #ded9d2;
-  --rule-soft: #eae7e2;
+  --surface-2: #e8eef4;
+  --rule: #d3dde6;
+  --rule-soft: #e3eaf1;
 
-  --text: #1d1f24;
-  --muted: #62666e;
-  --faint: #8d9199;
+  --text: #0f1720;
+  --muted: #5d6f7e;
+  --faint: #8a9aa8;
 
-  --copper: #b45f30;
-  --copper-lift: #c96f3f;
-  --copper-wash: rgba(180, 95, 48, .1);
-  --verdigris: #2f8676;
-  --verdigris-wash: rgba(47, 134, 118, .12);
-  --signal: #b53c33;
-  --signal-wash: rgba(181, 60, 51, .12);
+  /* Telegram's own blues: #2AABEE over #229ED9 is the pair from their mark. */
+  --copper: #229ed9;
+  --copper-lift: #2aabee;
+  --copper-wash: rgba(34, 158, 217, .11);
+  --verdigris: #2f9e5f;
+  --verdigris-wash: rgba(47, 158, 95, .12);
+  --signal: #d8453c;
+  --signal-wash: rgba(216, 69, 60, .12);
 
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Cascadia Mono", Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -37,23 +38,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #16181d;
-    --surface: #1c1f25;
-    --surface-2: #23272e;
-    --rule: #30353d;
-    --rule-soft: #262b32;
+    /* Telegram Desktop's dark chat palette. */
+    --paper: #0e1621;
+    --surface: #17212b;
+    --surface-2: #1f2c39;
+    --rule: #263646;
+    --rule-soft: #1e2b38;
 
-    --text: #e8e6e1;
-    --muted: #979ca5;
-    --faint: #6e747d;
+    --text: #eaf1f7;
+    --muted: #7d90a0;
+    --faint: #5c6f7e;
 
-    --copper: #d2793f;
-    --copper-lift: #e08a4e;
-    --copper-wash: rgba(210, 121, 63, .15);
-    --verdigris: #45a996;
-    --verdigris-wash: rgba(69, 169, 150, .16);
-    --signal: #d9564c;
-    --signal-wash: rgba(217, 86, 76, .16);
+    --copper: #2aabee;
+    --copper-lift: #45b8f2;
+    --copper-wash: rgba(42, 171, 238, .15);
+    --verdigris: #4dcd5e;
+    --verdigris-wash: rgba(77, 205, 94, .15);
+    --signal: #e5615a;
+    --signal-wash: rgba(229, 97, 90, .15);
 
     --lift: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 34px rgba(0, 0, 0, .38);
   }
@@ -88,14 +90,16 @@ button, input { font-family: inherit; }
 
 /* ── mark ────────────────────────────────────────────────────────── */
 .logo-mark {
-  width: 52px; height: 52px; margin: 0 auto 20px; border-radius: 13px;
-  background: var(--copper); color: #fff;
-  display: grid; place-items: center; font-size: 25px; font-weight: 600;
+  width: 60px; height: 60px; margin: 0 auto 20px; border-radius: 50%;
+  background: linear-gradient(180deg, #2aabee, #229ed9);
+  color: #fff; display: grid; place-items: center;
+  box-shadow: 0 6px 20px rgba(34, 158, 217, .3);
 }
+.logo-mark svg { width: 60%; height: 60%; transform: translateX(-1px); }
 .logo-mark.sm {
-  width: 22px; height: 22px; border-radius: 6px; font-size: 12px; margin: 0;
-  background: var(--copper);
+  width: 24px; height: 24px; margin: 0; box-shadow: none;
 }
+.logo-mark.sm svg { width: 62%; height: 62%; }
 
 /* ── first-run language gate ─────────────────────────────────────── */
 .gate { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--paper); }
@@ -121,16 +125,21 @@ button, input { font-family: inherit; }
 /* ── layout ──────────────────────────────────────────────────────── */
 #app { display: flex; flex-direction: column; height: 100vh; }
 
+/* The macOS traffic lights own the top-left corner, so on that platform the bar gets a
+   band above the row instead of a left indent — that way the brand lines up with the
+   content below it rather than sitting mysteriously inset. */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 14px 0 14px; height: 50px;
+  padding: 0 22px; height: 52px;
   border-bottom: 1px solid var(--rule-soft);
   background: var(--surface); flex-shrink: 0;
   -webkit-app-region: drag;
 }
-.brand { display: flex; align-items: center; gap: 9px; padding-left: 62px; }
+[data-platform="darwin"] .topbar { height: 78px; padding-top: 26px; }
+
+.brand { display: flex; align-items: center; gap: 10px; }
 .brand-name {
-  font-family: var(--mono); font-weight: 500; font-size: 14px; letter-spacing: -.2px;
+  font-family: var(--mono); font-weight: 500; font-size: 15px; letter-spacing: -.3px;
 }
 .topbar-actions { display: flex; gap: 3px; align-items: center; -webkit-app-region: no-drag; }
 
@@ -153,7 +162,7 @@ button, input { font-family: inherit; }
 .handle-btn.inline { padding: 0; font-size: 12px; }
 .handle-btn.inline:hover { background: none; text-decoration: underline; }
 
-.content { flex: 1; overflow-y: auto; padding: 24px 24px 40px; }
+.content { flex: 1; overflow-y: auto; padding: 22px 22px 40px; }
 
 /* ── composer ────────────────────────────────────────────────────── */
 .hero {
@@ -218,7 +227,7 @@ input::placeholder { color: var(--faint); }
 
 /* ── banner ──────────────────────────────────────────────────────── */
 .banner {
-  margin: 16px 24px 0; padding: 12px 14px;
+  margin: 16px 22px 0; padding: 12px 14px;
   background: var(--surface); border: 1px solid var(--rule);
   border-left: 2px solid var(--copper); border-radius: var(--r);
   display: flex; align-items: flex-start; gap: 11px; animation: rise .22s var(--ease);
@@ -441,6 +450,46 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .about-k { color: var(--muted); }
 .about-v { font-family: var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* ── sign-in modal ───────────────────────────────────────────────── */
+.overlay.center { align-items: center; justify-content: center; }
+
+.modal {
+  width: 420px; max-width: 92vw; padding: 32px 30px 22px;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 14px; box-shadow: var(--lift);
+  text-align: center; animation: rise .26s var(--ease);
+}
+.modal-mark {
+  width: 62px; height: 62px; margin: 0 auto 18px; border-radius: 50%;
+  background: linear-gradient(180deg, #2aabee, #229ed9); color: #fff;
+  display: grid; place-items: center;
+  box-shadow: 0 6px 22px rgba(34, 158, 217, .32);
+}
+.modal-mark svg { width: 58%; height: 58%; transform: translateX(-1px); }
+.modal h2 { font-size: 18px; font-weight: 600; margin-bottom: 9px; letter-spacing: -.2px; }
+.modal-sub { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin-bottom: 22px; }
+.modal-step { display: flex; flex-direction: column; align-items: center; gap: 13px; }
+.step-note { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.step-note.err { color: var(--signal); font-family: var(--mono); font-size: 11.5px; word-break: break-word; }
+.primary-btn.wide { width: 100%; padding: 11px; }
+.modal-dismiss { margin-top: 18px; color: var(--faint); }
+
+.spinner {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid var(--rule); border-top-color: var(--copper);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.account-list { display: flex; flex-direction: column; gap: 7px; width: 100%; }
+.account-btn {
+  padding: 11px 14px; font-family: var(--mono); font-size: 13px;
+  background: var(--paper); color: var(--text);
+  border: 1px solid var(--rule); border-radius: var(--r); cursor: pointer;
+  transition: border-color .15s var(--ease), color .15s var(--ease);
+}
+.account-btn:hover { border-color: var(--copper); color: var(--copper); }
 
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-track { background: transparent; }

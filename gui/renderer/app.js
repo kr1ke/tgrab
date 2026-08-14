@@ -46,6 +46,16 @@ const I18N = {
     from: 'From', to: 'To', apply: 'Apply',
     trimHint: 'mm:ss — leave “To” empty to run to the end',
     stConverting: 'converting',
+    signIn: 'Connect your Telegram',
+    signInSub: 'tgrab imports the session already signed in on Telegram Desktop. No phone number, no code, no password — nothing leaves this machine.',
+    closeDesktop: 'Quit Telegram Desktop first — its session files are being read.',
+    connect: 'Connect', pickAccount: 'Choose an account', retry: 'Try again', later: 'Later',
+    lgStarting: 'Reading the desktop session…',
+    lgImporting: 'Importing…',
+    lgFinishing: 'Finishing up — keeping your desktop session signed in.',
+    lgDone: 'Connected.',
+    lg2fa: 'This account asks for its cloud password. tgrab will not collect it — finish in a terminal.',
+    connectBtn: 'Connect Telegram',
   },
   ru: {
     settings: 'Настройки', download: 'Скачать', options: 'Параметры', copy: 'Копировать',
@@ -82,6 +92,16 @@ const I18N = {
     from: 'С', to: 'До', apply: 'Применить',
     trimHint: 'мм:сс — оставьте «До» пустым, чтобы до конца',
     stConverting: 'обработка',
+    signIn: 'Подключите Telegram',
+    signInSub: 'tgrab возьмёт сессию, под которой вы уже вошли в Telegram Desktop. Без номера, без кода, без пароля — ничего не покидает этот компьютер.',
+    closeDesktop: 'Сначала закройте Telegram Desktop — читаются его файлы сессии.',
+    connect: 'Подключить', pickAccount: 'Выберите аккаунт', retry: 'Ещё раз', later: 'Позже',
+    lgStarting: 'Читаю сессию десктопа…',
+    lgImporting: 'Импортирую…',
+    lgFinishing: 'Завершаю — сессия в Telegram Desktop останется активной.',
+    lgDone: 'Подключено.',
+    lg2fa: 'Этот аккаунт запрашивает облачный пароль. tgrab его не собирает — завершите вход в терминале.',
+    connectBtn: 'Подключить Telegram',
   },
 };
 
@@ -356,11 +376,66 @@ async function boot() {
 async function afterReady() {
   syncPanel();
   const st = await window.tgrab.status();
-  if (!st.loggedIn) showLoginBanner();
+  document.documentElement.dataset.platform = st.platform || '';
+
+  if (!st.loggedIn) {
+    // With a PTY available the app can run the whole exchange itself; without one,
+    // fall back to handing the command over.
+    if (await window.tgrab.loginAutomated()) openLogin();
+    else showLoginBanner();
+  }
 
   for (const rec of await window.tgrab.list()) items.set(rec.id, rec);
   render();
 }
+
+// ── sign in ────────────────────────────────────────────────────────
+const loginSteps = ['close', 'busy', 'pick', 'fail'];
+function loginStep(name) {
+  loginSteps.forEach((s) => $(`#login-step-${s}`).classList.toggle('hidden', s !== name));
+}
+function openLogin() { loginStep('close'); $('#login-overlay').classList.remove('hidden'); }
+function closeLogin() { $('#login-overlay').classList.add('hidden'); }
+
+$('#login-go').onclick = async () => {
+  loginStep('busy');
+  $('#login-status').textContent = t('lgStarting');
+  const r = await window.tgrab.loginStart({});
+  if (!r.ok) {
+    loginStep('fail');
+    $('#login-error').textContent = r.error;
+  }
+};
+
+$('#login-close').onclick = () => { window.tgrab.loginCancel(); closeLogin(); };
+$('#login-retry').onclick = () => loginStep('close');
+$('#login-terminal').onclick = async () => { await window.tgrab.openLoginTerminal(); pollLogin(); closeLogin(); };
+
+window.tgrab.onLoginEvent((p) => {
+  if (p.phase === 'choosing') {
+    loginStep('pick');
+    const box = $('#login-accounts');
+    box.innerHTML = '';
+    p.accounts.forEach((id, i) => {
+      const b = document.createElement('button');
+      b.className = 'account-btn';
+      b.textContent = id;
+      b.onclick = () => { loginStep('busy'); $('#login-status').textContent = t('lgImporting'); window.tgrab.loginChoose(i); };
+      box.appendChild(b);
+    });
+    return;
+  }
+  if (p.phase === 'importing') { loginStep('busy'); $('#login-status').textContent = t('lgImporting'); return; }
+  if (p.phase === 'finishing') { loginStep('busy'); $('#login-status').textContent = t('lgFinishing'); return; }
+  if (p.phase === 'needs2fa') { loginStep('fail'); $('#login-error').textContent = t('lg2fa'); return; }
+  if (p.phase === 'done') {
+    $('#login-status').textContent = t('lgDone');
+    $('#banner').classList.add('hidden');
+    setTimeout(closeLogin, 700);
+    return;
+  }
+  if (p.phase === 'failed') { loginStep('fail'); $('#login-error').textContent = p.error || ''; }
+});
 
 // ── events ─────────────────────────────────────────────────────────
 window.tgrab.onUpdate((rec) => { items.set(rec.id, { ...items.get(rec.id), ...rec }); render(); });

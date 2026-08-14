@@ -8,12 +8,22 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- Telegram-family mark, deliberately not their logo: a paper plane on descent,
+       so it reads as receiving rather than sending. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="mark" viewBox="0 0 24 24">
+      <path d="M20.5 4.2 3.6 11.1a.6.6 0 0 0 .04 1.11l4.2 1.42 1.6 4.9a.6.6 0 0 0 1.05.2l2.2-2.66 4.2 3.1a.6.6 0 0 0 .94-.33l3.5-13.9a.6.6 0 0 0-.83-.7Z"
+            fill="currentColor"/>
+      <path d="m9.5 13.9 8.4-6.6-6.4 7.7Z" fill="currentColor" opacity=".45"/>
+    </symbol>
+  </svg>
+
   <div class="drag-strip"></div>
 
   <!-- ── first run: language ─────────────────────────────────────── -->
   <div id="lang-gate" class="gate hidden">
     <div class="gate-card">
-      <div class="logo-mark">↓</div>
+      <div class="logo-mark"><svg viewBox="0 0 24 24"><use href="#mark"/></svg></div>
       <h1>tgrab</h1>
       <p class="gate-sub">Choose language · Выберите язык</p>
       <div class="lang-grid">
@@ -27,7 +37,7 @@
   <div id="app" class="hidden">
     <header class="topbar">
       <div class="brand">
-        <span class="logo-mark sm">↓</span>
+        <span class="logo-mark sm"><svg viewBox="0 0 24 24"><use href="#mark"/></svg></span>
         <span class="brand-name">tgrab</span>
       </div>
       <div class="topbar-actions">
@@ -101,6 +111,41 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- ── sign in ─────────────────────────────────────────────────── -->
+  <div id="login-overlay" class="overlay center hidden">
+    <div class="modal">
+      <div class="modal-mark"><svg viewBox="0 0 24 24"><use href="#mark"/></svg></div>
+      <h2 data-i18n="signIn">Connect your Telegram</h2>
+      <p class="modal-sub" data-i18n="signInSub">
+        tgrab imports the session already signed in on Telegram Desktop. No phone number, no
+        code, no password — nothing leaves this machine.
+      </p>
+
+      <div id="login-step-close" class="modal-step">
+        <p class="step-note" data-i18n="closeDesktop">Quit Telegram Desktop first — its session files are being read.</p>
+        <button id="login-go" class="primary-btn wide" data-i18n="connect">Connect</button>
+      </div>
+
+      <div id="login-step-busy" class="modal-step hidden">
+        <div class="spinner"></div>
+        <p class="step-note" id="login-status"></p>
+      </div>
+
+      <div id="login-step-pick" class="modal-step hidden">
+        <p class="step-note" data-i18n="pickAccount">Choose an account</p>
+        <div id="login-accounts" class="account-list"></div>
+      </div>
+
+      <div id="login-step-fail" class="modal-step hidden">
+        <p class="step-note err" id="login-error"></p>
+        <button id="login-retry" class="mini-btn" data-i18n="retry">Try again</button>
+        <button id="login-terminal" class="mini-btn" data-i18n="openTerminal">Open terminal</button>
+      </div>
+
+      <button id="login-close" class="link-btn modal-dismiss" data-i18n="later">Later</button>
+    </div>
   </div>
 
   <!-- ── settings ────────────────────────────────────────────────── -->
@@ -198,7 +243,7 @@
           <h3 data-i18n="grpAbout">About</h3>
           <div class="about-row">
             <span class="about-k">tgrab</span>
-            <span class="about-v" id="about-version">0.2.0</span>
+            <span class="about-v" id="about-version">0.3.0</span>
           </div>
           <div class="about-row">
             <span class="about-k" data-i18n="author">Author</span>

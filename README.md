@@ -81,11 +81,11 @@ Options: `--lang <en|ru>` `--dir <path>` `--json` `--quiet` `--help`.
 <table>
 <tr>
 <td width="50%"><img src="docs/screenshots/03-settings.png" alt="Settings"></td>
-<td width="50%"><img src="docs/screenshots/06-light.png" alt="Light theme"></td>
+<td width="50%"><img src="docs/screenshots/06-light.png" alt="Sign in"></td>
 </tr>
 <tr>
 <td align="center"><em>Template, threads, proxy, theme</em></td>
-<td align="center"><em>Light theme</em></td>
+<td align="center"><em>Sign-in — no code, no password</em></td>
 </tr>
 </table>
 

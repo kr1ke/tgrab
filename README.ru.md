@@ -81,11 +81,11 @@ tgrab даёт `2026-08-12_11-53_Разбор-балансировщика_42.mp
 <table>
 <tr>
 <td width="50%"><img src="docs/screenshots/03-settings.png" alt="Настройки"></td>
-<td width="50%"><img src="docs/screenshots/06-light.png" alt="Светлая тема"></td>
+<td width="50%"><img src="docs/screenshots/06-light.png" alt="Вход"></td>
 </tr>
 <tr>
 <td align="center"><em>Шаблон, потоки, прокси, тема</em></td>
-<td align="center"><em>Светлая тема</em></td>
+<td align="center"><em>Вход — без кода и пароля</em></td>
 </tr>
 </table>
 

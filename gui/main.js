@@ -467,11 +467,126 @@ ipcMain.handle('session:clean', () => {
   catch { return false; }
 });
 
-// `tdl login` is an arrow-key account picker that needs a real TTY, which an Electron
-// window does not have. Rather than fake it and hang on stdin, the app hands the command
-// over — and can open a terminal with it already typed, so the user never copies anything.
-// The proper fix is an embedded PTY (node-pty + xterm.js); that needs native prebuilds
-// per platform, so it is deliberately deferred.
+// ───────────────────────────── login ────────────────────────────────
+// `tdl login` is a TUI: it refuses a plain pipe with EOF and only runs against a real
+// terminal. node-pty gives it one, so the app can drive the whole exchange itself.
+//
+// tdl asks TWO questions, and the second one matters far more than the first:
+//   1. "Choose a user id"                        — arrow keys + Enter
+//   2. "Do you want to logout existing desktop session? (y/N)"
+// Answering (2) with "y" SIGNS THE USER OUT OF TELEGRAM DESKTOP. It is always answered
+// "n" here, explicitly, never by letting a stray keystroke fall through to the default.
+
+let pty = null;
+try { pty = require('node-pty'); } catch { pty = null; }
+
+let loginSession = null;
+
+const stripCtl = (s) => s.replace(/\[[0-9;?]*[a-zA-Z]/g, '').replace(/[78]/g, '');
+
+function emitLogin(payload) {
+  if (win && !win.isDestroyed()) win.webContents.send('login:event', payload);
+}
+
+ipcMain.handle('login:automated', () => !!pty);
+
+ipcMain.handle('login:start', async (_e, opts = {}) => {
+  if (!pty) return { ok: false, error: 'pty_unavailable' };
+  if (loginSession) return { ok: false, error: 'already_running' };
+
+  const tdl = findTdl() || (await installTdl().catch(() => null));
+  if (!tdl) return { ok: false, error: 'tdl_unavailable' };
+
+  const args = ['login', '-T', 'desktop'];
+  if (opts.passcode) args.push('-p', opts.passcode);
+
+  const term = pty.spawn(tdl, args, {
+    name: 'xterm-color', cols: 100, rows: 30,
+    cwd: os.homedir(), env: process.env,
+  });
+
+  const state = { term, buf: '', phase: 'starting', accounts: [], picked: false, logoutAnswered: false };
+  loginSession = state;
+
+  const settle = () => {
+    // The picker redraws as it renders; give it a moment before reading the list.
+    if (state.picked) return;
+    const lines = stripCtl(state.buf).split(/\r?\n/);
+    const ids = [];
+    for (const l of lines) {
+      const m = l.match(/^\s*[>❯»]?\s*(\d{5,})\s*$/);
+      if (m && !ids.includes(m[1])) ids.push(m[1]);
+    }
+    state.accounts = ids;
+    if (ids.length <= 1) {
+      state.picked = true;
+      state.phase = 'importing';
+      emitLogin({ phase: 'importing', accounts: ids });
+      term.write('\r');
+    } else {
+      state.phase = 'choosing';
+      emitLogin({ phase: 'choosing', accounts: ids });
+    }
+  };
+
+  term.onData((d) => {
+    state.buf = (state.buf + d).slice(-16000);
+    const clean = stripCtl(state.buf);
+
+    if (state.phase === 'starting' && /Choose a user id/i.test(clean)) {
+      state.phase = 'listing';
+      setTimeout(settle, 700);
+      return;
+    }
+
+    // Always decline. "y" here logs the user out of Telegram Desktop.
+    if (!state.logoutAnswered && /logout existing desktop session/i.test(clean)) {
+      state.logoutAnswered = true;
+      emitLogin({ phase: 'finishing' });
+      term.write('n\r');
+      return;
+    }
+
+    if (/password/i.test(clean) && !/passcode/i.test(clean) && state.phase !== 'needs2fa') {
+      // tdl asks for the cloud password on some accounts. That is a credential the app
+      // must not collect or transmit — hand the user back to a terminal instead.
+      state.phase = 'needs2fa';
+      emitLogin({ phase: 'needs2fa' });
+    }
+  });
+
+  term.onExit(({ exitCode }) => {
+    const clean = stripCtl(state.buf);
+    const ok = exitCode === 0 || /successfully/i.test(clean);
+    loginSession = null;
+    if (ok && isLoggedIn()) emitLogin({ phase: 'done' });
+    else {
+      const m = clean.match(/(?:Error|error):\s*(.+)/);
+      emitLogin({ phase: 'failed', error: m ? m[1].trim() : `exited with code ${exitCode}` });
+    }
+  });
+
+  return { ok: true };
+});
+
+ipcMain.handle('login:choose', (_e, index) => {
+  const s = loginSession;
+  if (!s || s.picked) return false;
+  s.picked = true;
+  s.phase = 'importing';
+  emitLogin({ phase: 'importing' });
+  for (let i = 0; i < index; i++) s.term.write('[B');   // arrow-down per step
+  s.term.write('\r');
+  return true;
+});
+
+ipcMain.handle('login:cancel', () => {
+  if (!loginSession) return false;
+  try { loginSession.term.kill(); } catch { /* already gone */ }
+  loginSession = null;
+  return true;
+});
+
 ipcMain.handle('login:command', () => `"${findTdl() || 'tdl'}" login -T desktop`);
 
 ipcMain.handle('login:openTerminal', async () => {
