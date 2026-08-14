@@ -37,6 +37,8 @@
     },
     "linux": {
       "category": "Utility",
+      "icon": "build/icon.png",
+      "maintainer": "kr1ke <kr1ke@users.noreply.github.com>",
       "target": [{ "target": "AppImage", "arch": ["x64"] }, { "target": "deb", "arch": ["x64"] }]
     }
   }
