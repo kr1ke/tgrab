@@ -263,6 +263,121 @@ async function startDownload({ url, customName, dest }) {
   return rec;
 }
 
+// ───────────────────── post-download processing ─────────────────────
+// ffmpeg is bundled rather than fetched: unlike tdl it is a library-style dependency
+// with no interactive step, and asking a GUI user to install it would defeat the point.
+// Packaged builds run it from app.asar.unpacked, hence the path rewrite.
+
+function binFromModule(mod) {
+  try {
+    let p = require(mod);
+    if (p && typeof p === 'object' && p.path) p = p.path;
+    if (!p) return null;
+    return app.isPackaged ? p.replace('app.asar', 'app.asar.unpacked') : p;
+  } catch { return null; }
+}
+const ffmpegBin = () => binFromModule('ffmpeg-static');
+const ffprobeBin = () => binFromModule('ffprobe-static');
+
+function probeDuration(file) {
+  return new Promise((resolve) => {
+    const bin = ffprobeBin();
+    if (!bin) return resolve(0);
+    execFile(bin, ['-v', 'error', '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1', file], (err, out) => {
+      resolve(err ? 0 : parseFloat(String(out).trim()) || 0);
+    });
+  });
+}
+
+// Output always goes to a NEW file — the original download is never overwritten.
+function suffixed(file, suffix, ext) {
+  const dir = path.dirname(file);
+  const base = path.basename(file, path.extname(file));
+  return path.join(dir, `${base}_${suffix}${ext || path.extname(file)}`);
+}
+
+function opArgs(op, params, input, output) {
+  switch (op) {
+    case 'audio':
+      return ['-i', input, '-vn', '-c:a', 'aac', '-b:a', '192k', '-y', output];
+    case 'compress':
+      // 720p / CRF 28 is the "obviously smaller, still fine" point for talk-style video.
+      return ['-i', input, '-vf', 'scale=-2:min(720\\,ih)', '-c:v', 'libx264',
+        '-crf', '28', '-preset', 'veryfast', '-c:a', 'aac', '-b:a', '128k', '-y', output];
+    case 'speed': {
+      const n = Math.min(2, Math.max(1.05, parseFloat(params.factor) || 1.5));
+      // atempo is only valid across 0.5–2.0, which the clamp above already guarantees.
+      return ['-i', input, '-filter_complex',
+        `[0:v]setpts=PTS/${n}[v];[0:a]atempo=${n}[a]`,
+        '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-crf', '23',
+        '-preset', 'veryfast', '-c:a', 'aac', '-y', output];
+    }
+    case 'trim': {
+      // Stream copy keeps this instant even on a 250 MB file; cuts land on the nearest
+      // keyframe, which is what every simple trimmer does and what users expect here.
+      const a = ['-ss', String(params.start || '0')];
+      if (params.end) a.push('-to', String(params.end));
+      return [...a, '-i', input, '-c', 'copy', '-avoid_negative_ts', 'make_zero', '-y', output];
+    }
+    default:
+      return null;
+  }
+}
+
+async function startProcess({ file, op, params }) {
+  const id = nextId++;
+  const bin = ffmpegBin();
+  const labels = { audio: 'audio', compress: 'small', speed: `${params.factor || 1.5}x`, trim: 'trim' };
+  const ext = op === 'audio' ? '.m4a' : null;
+  const output = suffixed(file, labels[op] || op, ext);
+
+  const rec = {
+    id, kind: 'convert', op, url: path.basename(file),
+    name: path.basename(output), dest: path.dirname(file),
+    status: 'running', percent: 0, transferred: null, speed: null, eta: null, error: null,
+  };
+  downloads.set(id, rec);
+  push(rec);
+
+  if (!bin) { rec.status = 'failed'; rec.error = 'ffmpeg unavailable'; push(rec); return rec; }
+
+  const total = await probeDuration(file);
+  const args = opArgs(op, params || {}, file, output);
+  if (!args) { rec.status = 'failed'; rec.error = `unknown operation: ${op}`; push(rec); return rec; }
+
+  const child = spawn(bin, ['-hide_banner', '-nostdin', ...args], { windowsHide: true });
+  rec._child = child;
+  let tail = '';
+
+  child.stderr.on('data', (d) => {
+    tail = (tail + d.toString()).slice(-4000);
+    const m = /time=(\d+):(\d+):(\d+\.?\d*)/g;
+    let last = null, x;
+    while ((x = m.exec(tail)) !== null) last = x;
+    if (last && total > 0) {
+      const done = (+last[1]) * 3600 + (+last[2]) * 60 + parseFloat(last[3]);
+      rec.percent = Math.min(99.9, (done / total) * 100);
+      push(rec);
+    }
+  });
+
+  child.on('close', (code) => {
+    if (code === 0 && fs.existsSync(output)) {
+      rec.status = 'done';
+      rec.percent = 100;
+      rec.file = { path: output, size: fs.statSync(output).size };
+    } else {
+      rec.status = 'failed';
+      const m = tail.match(/^\s*(?:\[.*?\]\s*)?(Error|Invalid|Unknown|No such).*/mi);
+      rec.error = m ? m[0].trim() : `ffmpeg exited with code ${code}`;
+    }
+    push(rec);
+  });
+
+  return rec;
+}
+
 // tdl stamps files with the ORIGINAL post date, so "newest by mtime" is wrong.
 // Pick the most recently *created* entry instead (birthtime), falling back to ctime.
 function findNewestIn(dir) {
@@ -322,6 +437,14 @@ ipcMain.handle('download:cancel', (_e, id) => {
   return false;
 });
 
+ipcMain.handle('media:process', async (_e, payload) => {
+  const rec = await startProcess(payload);
+  const { _child, ...safe } = rec;
+  return safe;
+});
+
+ipcMain.handle('media:available', () => !!ffmpegBin());
+
 ipcMain.handle('download:list', () => {
   return [...downloads.values()].map(({ _child, ...r }) => r);
 });
@@ -344,14 +467,50 @@ ipcMain.handle('session:clean', () => {
   catch { return false; }
 });
 
-// Login is an interactive account picker in a terminal. A GUI cannot drive it,
-// so hand the user the exact command instead of pretending to automate it.
-ipcMain.handle('login:command', () => {
-  const tdl = findTdl() || 'tdl';
-  return IS_WIN
-    ? `"${tdl}" login -T desktop`
-    : `"${tdl}" login -T desktop`;
+// `tdl login` is an arrow-key account picker that needs a real TTY, which an Electron
+// window does not have. Rather than fake it and hang on stdin, the app hands the command
+// over — and can open a terminal with it already typed, so the user never copies anything.
+// The proper fix is an embedded PTY (node-pty + xterm.js); that needs native prebuilds
+// per platform, so it is deliberately deferred.
+ipcMain.handle('login:command', () => `"${findTdl() || 'tdl'}" login -T desktop`);
+
+ipcMain.handle('login:openTerminal', async () => {
+  const cmd = `"${findTdl() || 'tdl'}" login -T desktop`;
+  try {
+    if (IS_MAC) {
+      // osascript avoids writing a temp script and handles quoting predictably.
+      const escaped = cmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      await new Promise((resolve, reject) =>
+        execFile('osascript', ['-e', `tell application "Terminal" to do script "${escaped}"`,
+          '-e', 'tell application "Terminal" to activate'],
+        (e) => (e ? reject(e) : resolve())));
+      return { ok: true };
+    }
+    if (IS_WIN) {
+      await new Promise((resolve, reject) =>
+        execFile('cmd.exe', ['/c', 'start', 'cmd.exe', '/k', cmd], (e) => (e ? reject(e) : resolve())));
+      return { ok: true };
+    }
+    // Linux desktops disagree on which terminal exists; try the common ones in order.
+    const candidates = [
+      ['x-terminal-emulator', ['-e', 'bash', '-c', `${cmd}; exec bash`]],
+      ['gnome-terminal', ['--', 'bash', '-c', `${cmd}; exec bash`]],
+      ['konsole', ['-e', 'bash', '-c', `${cmd}; exec bash`]],
+      ['xfce4-terminal', ['-e', `bash -c '${cmd}; exec bash'`]],
+      ['xterm', ['-e', `bash -c '${cmd}; exec bash'`]],
+    ];
+    for (const [bin, args] of candidates) {
+      const ok = await new Promise((resolve) => execFile(bin, args, (e) => resolve(!e)));
+      if (ok) return { ok: true };
+    }
+    return { ok: false, error: 'no terminal emulator found' };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 });
+
+// The banner needs to disappear once the user finishes logging in elsewhere.
+ipcMain.handle('login:check', () => isLoggedIn());
 
 // ───────────────────────────── window ───────────────────────────────
 

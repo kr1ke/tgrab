@@ -14,8 +14,40 @@ skill — one engine behind all three.
 and you have an unsearchable pile. Its progress bar is also invisible from a script.
 
 tgrab gives you `2026-08-12_11-53_Load-balancer-deep-dive_42.mp4` and a progress line you can
-watch. Any Telegram chat — private, protected, public, groups, Saved Messages. English and
-Russian. `--json` everywhere for agents.
+watch.
+
+## Features
+
+> ### 🔒 Downloads from private and protected channels
+> This is the point. Closed channels you are a member of, channels with saving disabled,
+> restricted groups — tgrab pulls media out of all of them, because it signs in as **you**, with
+> your own Telegram session imported from Telegram Desktop. No bot, no channel admin rights, no
+> public link needed. If you can see it in your Telegram, you can archive it.
+
+**Sources** — private channels · protected channels with content-saving off · public channels ·
+groups and supergroups · forum topics · direct chats · Saved Messages
+
+**Downloading**
+- Single message by link, or a whole channel in one command
+- Custom name per download, or a template for everything
+- Resume interrupted transfers, skip files already on disk
+- Multi-threaded, with concurrency and proxy you control
+- Albums pulled whole when a link points at one item
+
+**Naming** — files land as `date_time_caption_id`, from the original post, so an archive sorts
+by content and a re-download never duplicates.
+
+**After the download** — one click each, always to a new file, never overwriting the original:
+- **Audio only** — strip the video, keep an `.m4a`
+- **Compress** — 720p, much smaller, still watchable
+- **Speed up** — 1.25× · 1.5× · 2×, audio pitch-corrected
+- **Trim** — from/to in `mm:ss`, instant
+
+**Interface** — English and Russian, light and dark, live progress with speed and ETA,
+`--json` on every CLI command for agents.
+
+> **In Russia, Telegram is blocked.** Turn on a VPN, or set a proxy in Settings / pass
+> `--proxy`, before downloading.
 
 ## Install
 
@@ -49,11 +81,11 @@ Options: `--lang <en|ru>` `--dir <path>` `--json` `--quiet` `--help`.
 <table>
 <tr>
 <td width="50%"><img src="docs/screenshots/03-settings.png" alt="Settings"></td>
-<td width="50%"><img src="docs/screenshots/04-russian.png" alt="Russian interface"></td>
+<td width="50%"><img src="docs/screenshots/06-light.png" alt="Light theme"></td>
 </tr>
 <tr>
 <td align="center"><em>Template, threads, proxy, theme</em></td>
-<td align="center"><em>Russian interface</em></td>
+<td align="center"><em>Light theme</em></td>
 </tr>
 </table>
 

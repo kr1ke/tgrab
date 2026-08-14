@@ -39,6 +39,13 @@ const I18N = {
     stPreparing: 'preparing', stInstalling: 'installing tdl', stCancelled: 'cancelled',
     cancel: 'Cancel', reveal: 'Show in folder', left: 'left',
     notLoggedInShort: 'Not logged in — run tgrab login in a terminal',
+    openTerminal: 'Open terminal',
+    vpnNotice: 'Telegram is blocked in Russia — turn on a VPN, or set a proxy in Settings, before downloading.',
+    grpAbout: 'About', author: 'Author', source: 'Source',
+    audioOnly: 'Audio only', compress: 'Compress', speedUp: 'Speed up', trim: 'Trim',
+    from: 'From', to: 'To', apply: 'Apply',
+    trimHint: 'mm:ss — leave “To” empty to run to the end',
+    stConverting: 'converting',
   },
   ru: {
     settings: 'Настройки', download: 'Скачать', options: 'Параметры', copy: 'Копировать',
@@ -68,6 +75,13 @@ const I18N = {
     stPreparing: 'подготовка', stInstalling: 'установка tdl', stCancelled: 'отменено',
     cancel: 'Отмена', reveal: 'Показать в папке', left: 'осталось',
     notLoggedInShort: 'Нет авторизации — выполните tgrab login в терминале',
+    openTerminal: 'Открыть терминал',
+    vpnNotice: 'В России Telegram заблокирован — перед скачиванием включите VPN или пропишите прокси в настройках.',
+    grpAbout: 'О программе', author: 'Автор', source: 'Исходники',
+    audioOnly: 'Только звук', compress: 'Сжать', speedUp: 'Ускорить', trim: 'Обрезать',
+    from: 'С', to: 'До', apply: 'Применить',
+    trimHint: 'мм:сс — оставьте «До» пустым, чтобы до конца',
+    stConverting: 'обработка',
   },
 };
 
@@ -98,7 +112,8 @@ function fmtEta(sec) {
   return `${sec}s`;
 }
 
-function statusLabel(s) {
+function statusLabel(s, rec) {
+  if (s === 'running' && rec && rec.kind === 'convert') return t('stConverting');
   return { running: t('stRunning'), done: t('stDone'), failed: t('stFailed'),
     preparing: t('stPreparing'), installing: t('stInstalling'), cancelled: t('stCancelled') }[s] || s;
 }
@@ -109,6 +124,68 @@ function shortName(rec) {
   return rec.url.replace(/^https?:\/\//, '');
 }
 
+const isVideo = (p) => /\.(mp4|mkv|mov|webm|m4v|avi)$/i.test(p || '');
+
+// One click for the two that need no input; a single control for the two that do.
+// Every result is written to a new file — the download itself is never touched.
+function tools(rec) {
+  const wrap = document.createElement('div');
+  wrap.className = 'tools';
+
+  const run = (op, params) => window.tgrab.process({ file: rec.file.path, op, params })
+    .then((r) => { items.set(r.id, r); render(); });
+
+  const btn = (label, onClick) => {
+    const b = document.createElement('button');
+    b.className = 'tool-btn';
+    b.textContent = label;
+    b.onclick = onClick;
+    return b;
+  };
+
+  wrap.append(
+    btn(t('audioOnly'), () => run('audio', {})),
+    btn(t('compress'), () => run('compress', {})),
+  );
+
+  const speedWrap = document.createElement('div');
+  speedWrap.className = 'tool-group';
+  speedWrap.appendChild(Object.assign(document.createElement('span'),
+    { className: 'tool-label', textContent: t('speedUp') }));
+  [1.25, 1.5, 2].forEach((f) => {
+    const b = btn(`${f}×`, () => run('speed', { factor: f }));
+    b.classList.add('tool-mini');
+    speedWrap.appendChild(b);
+  });
+  wrap.appendChild(speedWrap);
+
+  const trimWrap = document.createElement('div');
+  trimWrap.className = 'tool-group';
+  trimWrap.appendChild(Object.assign(document.createElement('span'),
+    { className: 'tool-label', textContent: t('trim') }));
+  const from = Object.assign(document.createElement('input'),
+    { type: 'text', className: 'tool-time', placeholder: '0:00' });
+  const to = Object.assign(document.createElement('input'),
+    { type: 'text', className: 'tool-time', placeholder: t('to') });
+  const go = btn(t('apply'), () => run('trim', { start: norm(from.value), end: norm(to.value) }));
+  go.classList.add('tool-mini');
+  trimWrap.append(from, to, go);
+  wrap.appendChild(trimWrap);
+
+  return wrap;
+}
+
+// Accepts 90, 1:30 or 00:01:30 and hands ffmpeg something it always understands.
+function norm(v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  if (/^\d+$/.test(s)) return s;
+  const parts = s.split(':').map((x) => parseInt(x, 10) || 0);
+  if (parts.length === 2) return String(parts[0] * 60 + parts[1]);
+  if (parts.length === 3) return String(parts[0] * 3600 + parts[1] * 60 + parts[2]);
+  return s;
+}
+
 function render() {
   const list = $('#list');
   const arr = [...items.values()].sort((a, b) => b.id - a.id);
@@ -117,7 +194,7 @@ function render() {
 
   for (const rec of arr) {
     const el = document.createElement('div');
-    el.className = 'item';
+    el.className = `item ${rec.status}`;   // status drives the left state stripe
     const pct = Math.max(0, Math.min(100, rec.percent || 0));
     const fillCls = rec.status === 'done' ? 'done' : rec.status === 'failed' ? 'failed' : '';
 
@@ -128,7 +205,7 @@ function render() {
     nm.textContent = shortName(rec);
     const badge = document.createElement('span');
     badge.className = `badge ${rec.status}`;
-    badge.textContent = statusLabel(rec.status);
+    badge.textContent = statusLabel(rec.status, rec);
     const acts = document.createElement('div');
     acts.className = 'item-actions';
     if (rec.status === 'running') {
@@ -183,6 +260,8 @@ function render() {
       el.appendChild(err);
     }
 
+    if (rec.status === 'done' && rec.file && isVideo(rec.file.path)) el.appendChild(tools(rec));
+
     list.appendChild(el);
   }
 }
@@ -197,7 +276,26 @@ async function showLoginBanner() {
   code.classList.remove('hidden');
   $('#banner-copy').classList.remove('hidden');
   $('#banner-copy').onclick = () => navigator.clipboard.writeText(cmd);
+  $('#banner-terminal').classList.remove('hidden');
+  $('#banner-terminal').onclick = async () => {
+    const r = await window.tgrab.openLoginTerminal();
+    if (!r.ok) navigator.clipboard.writeText(cmd);
+    pollLogin();
+  };
   $('#banner').classList.remove('hidden');
+}
+
+// The user finishes logging in outside the app, so watch for it and clear the banner
+// instead of making them restart.
+let loginTimer = null;
+function pollLogin() {
+  clearInterval(loginTimer);
+  loginTimer = setInterval(async () => {
+    if (await window.tgrab.checkLogin()) {
+      clearInterval(loginTimer);
+      $('#banner').classList.add('hidden');
+    }
+  }, 2000);
 }
 
 function showInfoBanner(text) {
@@ -320,5 +418,11 @@ $('#clean-now').onclick = async () => {
   await window.tgrab.cleanSession();
   showInfoBanner(t('cleaned'));
 };
+
+const TG = 'https://t.me/kr1ke';
+const REPO = 'https://github.com/kr1ke/tgrab';
+$('#tg-link').onclick = () => window.tgrab.openExternal(TG);
+$('#tg-link-2').onclick = () => window.tgrab.openExternal(TG);
+$('#repo-link').onclick = () => window.tgrab.openExternal(REPO);
 
 boot();

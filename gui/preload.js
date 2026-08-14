@@ -23,5 +23,10 @@ contextBridge.exposeInMainWorld('tgrab', {
   openExternal: (u) => ipcRenderer.invoke('shell:open', u),
 
   loginCommand: () => ipcRenderer.invoke('login:command'),
+  openLoginTerminal: () => ipcRenderer.invoke('login:openTerminal'),
+  checkLogin: () => ipcRenderer.invoke('login:check'),
   cleanSession: () => ipcRenderer.invoke('session:clean'),
+
+  process: (payload) => ipcRenderer.invoke('media:process', payload),
+  mediaAvailable: () => ipcRenderer.invoke('media:available'),
 });

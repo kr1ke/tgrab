@@ -6,7 +6,7 @@
 
 set -uo pipefail
 
-TGRAB_VERSION="0.1.0"
+TGRAB_VERSION="0.2.0"
 TDL_MIN="0.20.3"
 
 TGRAB_HOME="${TGRAB_HOME:-$HOME/.local/share/tgrab}"
@@ -45,6 +45,7 @@ msg_en() {
     unknown_cmd)   echo "Unknown command:" ;;
     need_arg)      echo "Missing required argument:" ;;
     no_tdl)        echo "tdl is not available and could not be installed." ;;
+    vpn)           echo "Telegram is blocked in Russia — turn on a VPN, or pass --proxy, before downloading." ;;
     *)             echo "$1" ;;
   esac
 }
@@ -72,6 +73,7 @@ msg_ru() {
     unknown_cmd)   echo "Неизвестная команда:" ;;
     need_arg)      echo "Не хватает обязательного аргумента:" ;;
     no_tdl)        echo "tdl недоступен и не может быть установлен." ;;
+    vpn)           echo "В России Telegram заблокирован — включите VPN или передайте --proxy перед скачиванием." ;;
     *)             echo "$1" ;;
   esac
 }
@@ -199,6 +201,7 @@ cmd_login() {
   done
   tdl="$(ensure_tdl)" || die "$(msg no_tdl)" 4
   if [ ! -t 0 ]; then die "$(msg login_noniact)" 5; fi
+  warn "$(msg vpn)"
   say "$(msg login_close)"
   say "$(msg login_pick)"
   [ -n "$passcode" ] || say "$(msg login_pass)"
@@ -305,6 +308,7 @@ cmd_doctor() {
     printf 'logged in  %s\n' "$logged"
     printf 'language   %s\n' "$LANG_CODE"
     printf 'config     %s\n' "$TGRAB_CONFIG"
+    printf '\n%s\n' "$(msg vpn)"
   fi
 }
 

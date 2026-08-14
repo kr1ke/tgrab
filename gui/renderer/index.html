@@ -31,6 +31,7 @@
         <span class="brand-name">tgrab</span>
       </div>
       <div class="topbar-actions">
+        <button id="tg-link" class="handle-btn" title="Telegram">@kr1ke</button>
         <button id="lang-toggle" class="ghost-btn" title="Language"><span id="lang-label">EN</span></button>
         <button id="open-settings" class="ghost-btn" data-i18n-title="settings">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -47,6 +48,7 @@
         <span id="banner-text"></span>
         <code id="banner-code" class="hidden"></code>
       </div>
+      <button id="banner-terminal" class="mini-btn hidden" data-i18n="openTerminal">Open terminal</button>
       <button id="banner-copy" class="mini-btn hidden" data-i18n="copy">Copy</button>
       <button id="banner-dismiss" class="mini-btn ghost">✕</button>
     </div>
@@ -65,6 +67,9 @@
           <span class="hint" data-i18n="linkHint">Private, protected, public, groups, Saved Messages — all work.</span>
           <button id="toggle-adv" class="link-btn" data-i18n="options">Options</button>
         </div>
+        <p class="notice" data-i18n="vpnNotice">
+          Telegram is blocked in Russia — turn on a VPN, or set a proxy in Settings, before downloading.
+        </p>
 
         <div id="advanced" class="advanced hidden">
           <div class="adv-grid">
@@ -187,6 +192,22 @@
             <span data-i18n="cleanOnQuit">Delete the auth key when the app quits</span>
           </label>
           <button id="clean-now" class="danger-btn" data-i18n="cleanNow">Delete auth key now</button>
+        </div>
+
+        <div class="group about">
+          <h3 data-i18n="grpAbout">About</h3>
+          <div class="about-row">
+            <span class="about-k">tgrab</span>
+            <span class="about-v" id="about-version">0.2.0</span>
+          </div>
+          <div class="about-row">
+            <span class="about-k" data-i18n="author">Author</span>
+            <button class="handle-btn inline" id="tg-link-2">@kr1ke</button>
+          </div>
+          <div class="about-row">
+            <span class="about-k" data-i18n="source">Source</span>
+            <button class="handle-btn inline" id="repo-link">github.com/kr1ke/tgrab</button>
+          </div>
         </div>
 
       </div>

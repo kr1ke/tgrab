@@ -36,6 +36,7 @@ const SHOTS = {
   '03-settings': { state: { lang: 'en', records: RECORDS }, prep: "document.querySelector('#open-settings').click()" },
   '04-russian': { state: { lang: 'ru', records: RECORDS }, prep: "document.querySelector('#toggle-adv').click()" },
   '05-login': { state: { lang: 'en', records: [], loggedIn: false }, prep: null },
+  '06-light': { state: { lang: 'en', records: RECORDS }, prep: null, theme: 'light' },
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -45,12 +46,13 @@ app.whenReady().then(async () => {
   const shot = SHOTS[NAME];
   if (!shot) { console.error('unknown shot', NAME); app.exit(1); return; }
 
-  nativeTheme.themeSource = 'dark';
+  nativeTheme.themeSource = shot.theme || 'dark';
   fs.mkdirSync(OUT, { recursive: true });
   process.env.SHOOT_STATE = JSON.stringify(shot.state);
 
   const win = new BrowserWindow({
-    width: 940, height: 720, show: true, backgroundColor: '#0e1117',
+    width: 940, height: 720, show: true,
+    backgroundColor: shot.theme === 'light' ? '#f6f5f2' : '#16181d',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'shoot-preload.js'),
