@@ -14,9 +14,14 @@ Guidance for Claude Code working in this repository.
 | `skill/tgrab/SKILL.md` | Agent skill, copied into `.claude/skills/` |
 | `AGENTS.md` | Machine-facing contract for AI agents driving the CLI |
 | `scripts/` | `shoot.js` (screenshots), `make-icon.js` (app icon) — both render the real UI through Electron |
+| `downloads/` | Where the app saves media. Git-ignored; never commit anything from here |
+| `.claude/` | Claude Code config for this repo. `skills/tgrab` is a **symlink** to `skill/tgrab` so there is one copy, not two that drift |
 
 All three wrap [tdl](https://github.com/iyear/tdl), which is **downloaded at runtime, never
 vendored**. See [Licensing](#licensing-this-is-load-bearing).
+
+Everything lives in this one directory. An earlier prototype at `~/www/trash/tg-video` was
+folded in and deleted — if a stale reference to it turns up, it is wrong.
 
 ## Hard rules
 

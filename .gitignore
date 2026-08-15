@@ -26,3 +26,6 @@ tdl-users.json
 
 # Screenshots are committed deliberately — keep them
 !docs/screenshots/*.png
+
+# Downloaded media lives here and stays out of git.
+downloads/
